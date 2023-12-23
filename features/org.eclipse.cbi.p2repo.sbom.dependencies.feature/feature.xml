@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature
+      id="org.eclipse.cbi.p2repo.sbom.dependencies.feature"
+      label="%featureName"
+      version="0.1.0.qualifier"
+      provider-name="%providerName"
+      license-feature="org.eclipse.license"
+      license-feature-version="0.0.0">
+
+   <description>
+      %description
+   </description>
+
+   <copyright>
+      %copyright
+   </copyright>
+
+   <license url="%licenseURL">
+      %license
+   </license>
+
+   <plugin
+         id="com.ethlo.time.chronograph"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.fasterxml.jackson.core.jackson-annotations"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.fasterxml.jackson.core.jackson-core"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.fasterxml.jackson.core.jackson-databind"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.fasterxml.jackson.dataformat.jackson-dataformat-xml"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.fasterxml.jackson.dataformat.jackson-dataformat-yaml"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.fasterxml.woodstox.woodstox-core"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.github.package-url.packageurl-java"
+         version="0.0.0"/>
+
+   <plugin
+         id="com.networknt.json-schema-validator"
+         version="0.0.0"/>
+
+   <plugin
+         id="org.apache.commons.commons-io"
+         version="0.0.0"/>
+
+   <plugin
+         id="org.apache.commons.lang3"
+         version="0.0.0"/>
+
+   <plugin
+         id="org.cyclonedx.core-java"
+         version="0.0.0"/>
+
+   <plugin
+         id="org.yaml.snakeyaml"
+         version="0.0.0"/>
+
+   <plugin
+         id="stax2-api"
+         version="0.0.0"/>
+
+</feature>

@@ -1,0 +1,64 @@
+pipeline {
+  agent any
+
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    skipDefaultCheckout true
+    timeout(time: 20, unit: 'MINUTES')
+  }
+ 
+  tools {
+    jdk 'temurin-jdk17-latest'
+  }
+  
+  environment {
+    MAIL_TO = 'ed.merks@gmail.com'
+  }
+  
+
+  stages {
+    stage('SBOM Generator') {
+      steps {
+          sh '''
+            set -o pipefail
+
+            curl -O https://download.eclipse.org/cbi/updates/p2-sbom/products/nightly/latest/org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+            tar --warning=no-unknown-keyword -xf org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+
+            cbi-sbom/cbi-sbom \
+              -application org.eclipse.cbi.p2repo.sbom.generator \
+              -consoleLog \
+              -noSplash \
+              -verbose \
+              -input https://download.eclipse.org/eclipse/updates/4.30/R-4.30-202312010110 \
+              -xml-output eclipse-sdk-4.30-sbom.xml \
+              -json-output eclipse-sdk-4.30-sbom.json \
+              -vmargs \
+                -Dfile.encoding=UTF-8 2>&1 | tee log
+          '''
+      }
+    }
+
+    stage('Archive Results') {
+      steps {
+        archiveArtifacts '*.xml,*.json'
+      }
+    }
+  }
+
+  post {
+    failure {
+      mail to: env.MAIL_TO,
+      subject: "[SBOM Generator] Build Failure ${currentBuild.fullDisplayName}",
+      mimeType: 'text/html',
+      body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
+    }
+
+    fixed {
+      mail to: env.MAIL_TO,
+      subject: "[SBOM Generator] Back to normal ${currentBuild.fullDisplayName}",
+      mimeType: 'text/html',
+      body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature id="org.eclipse.cbi.p2repo.sbom.feature" version="0.0.0">
+      <category name="org.eclipse.cbi.p2repo.sbom"/>
+   </feature>
+   <category-def name="org.eclipse.cbi.p2repo.sbom" label="CBI p2 SBOM Build System">
+      <description>
+         The Eclipse Common Build Infrastucture p2 SBOM features
+      </description>
+   </category-def>
+</site>
