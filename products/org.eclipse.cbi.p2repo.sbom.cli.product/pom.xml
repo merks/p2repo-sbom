@@ -15,6 +15,10 @@
   <artifactId>org.eclipse.cbi.p2repo.sbom.cli.product</artifactId>
   <packaging>eclipse-repository</packaging>
 
+  <properties>
+    <baselineRepository>https://download.eclipse.org/cbi/updates/p2-sbom/products/nightly/latest</baselineRepository>
+  </properties>
+
   <build>
     <plugins>
       <plugin>
