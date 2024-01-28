@@ -20,7 +20,7 @@
    </license>
 
    <plugin
-         id="com.ethlo.time.chronograph"
+         id="com.ethlo.time.itu"
          version="0.0.0"/>
 
    <plugin
