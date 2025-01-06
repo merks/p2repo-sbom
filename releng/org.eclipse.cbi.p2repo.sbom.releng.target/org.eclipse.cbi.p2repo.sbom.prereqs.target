@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <?pde version="3.8"?>
-<target name="Generated from P2 Repository SBOM" sequenceNumber="1">
+<target name="Generated from P2 Repository SBOM" sequenceNumber="2">
   <locations>
     <location includeAllPlatforms="false" includeConfigurePhase="true" includeMode="planner" includeSource="true" type="InstallableUnit">
       <unit id="com.fasterxml.woodstox.woodstox-core" version="0.0.0"/>
@@ -10,9 +10,9 @@
       <unit id="org.eclipse.license.feature.group" version="0.0.0"/>
       <unit id="org.eclipse.sdk.feature.group" version="0.0.0"/>
       <repository location="https://download.eclipse.org/cbi/updates/license"/>
-      <repository location="https://download.eclipse.org/eclipse/updates/4.31-I-builds"/>
-      <repository location="https://download.eclipse.org/releases/2024-03"/>
-      <repository location="https://download.eclipse.org/tools/orbit/simrel/orbit-aggregation/2024-03"/>
+      <repository location="https://download.eclipse.org/eclipse/updates/4.35-I-builds"/>
+      <repository location="https://download.eclipse.org/releases/2025-03"/>
+      <repository location="https://download.eclipse.org/tools/orbit/simrel/orbit-aggregation/2025-03"/>
     </location>
   </locations>
 </target>

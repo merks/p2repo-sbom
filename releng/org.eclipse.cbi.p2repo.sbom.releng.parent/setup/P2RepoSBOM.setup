@@ -92,8 +92,8 @@
   </setupTask>
   <setupTask
       xsi:type="jdt:JRETask"
-      version="JavaSE-17"
-      location="${jre.location-17}">
+      version="JavaSE-21"
+      location="${jre.location-21}">
     <description>Define the JRE needed to compile and run the Java projects of ${scope.project.label}</description>
   </setupTask>
   <setupTask
@@ -134,7 +134,7 @@
     <requirement
         name="org.eclipse.m2e.feature.feature.group"/>
     <requirement
-        name="org.eclipse.mylyn.wikitext_feature.feature.group"/>
+        name="org.eclipse.mylyn.wikitext.feature.feature.group"/>
     <repository
         url="https://download.eclipse.org/releases/${eclipse.target.platform}"/>
     <description>Install the tools needed in the IDE to work with the source code for ${scope.project.label}</description>
@@ -299,7 +299,7 @@
   <setupTask
       xsi:type="setup:StringSubstitutionTask"
       name="maven.build.java.home"
-      value="${jre.location-17}">
+      value="${jre.location-21}">
     <description>The location used to specify JAVA_HOME in the External Tools Configurations.</description>
   </setupTask>
   <stream name="main"
