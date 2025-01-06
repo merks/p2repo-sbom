@@ -8,13 +8,12 @@ pipeline {
   }
  
   tools {
-    jdk 'temurin-jdk17-latest'
+    jdk 'temurin-jdk21-latest'
   }
   
   environment {
     MAIL_TO = 'ed.merks@gmail.com'
   }
-  
 
   stages {
     stage('SBOM Generator') {
@@ -30,9 +29,9 @@ pipeline {
               -consoleLog \
               -noSplash \
               -verbose \
-              -input https://download.eclipse.org/eclipse/updates/4.30/R-4.30-202312010110 \
-              -xml-output eclipse-sdk-4.30-sbom.xml \
-              -json-output eclipse-sdk-4.30-sbom.json \
+              -input https://download.eclipse.org/eclipse/updates/4.34/R-4.34-202411201800 \
+              -xml-output eclipse-sdk-4.34-sbom.xml \
+              -json-output eclipse-sdk-4.34-sbom.json \
               -vmargs \
                 -Dfile.encoding=UTF-8 2>&1 | tee log
           '''
