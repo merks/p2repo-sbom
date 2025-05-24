@@ -55,6 +55,13 @@ pipeline {
     stage('Archive Results') {
       steps {
         archiveArtifacts '*.xml,*.json'
+        script { 
+          def description = """
+<a href="https://download.eclipse.org/cbi/sbom/?file=${env.BUILD_URL}artifact/bom.xml"><img src="https://download.eclipse.org/cbi/sbom/favicon.ico"/> bom.xml</a>
+<a href="https://download.eclipse.org/cbi/sbom/?file=${env.BUILD_URL}/artifact/bom.json"><img src="https://download.eclipse.org/cbi/sbom/favicon.ico"/> bom.json</a>
+""".trim()
+          currentBuild.description = description.replace("\n", "<br/>")
+        }
       }
     }
   }
