@@ -515,6 +515,9 @@ public class SBOMApplication implements IApplication {
 				// or are not relevant.
 				if (!key.startsWith("df_LT") && !key.startsWith("maven-") && !IInstallableUnit.PROP_NAME.equals(key)
 						&& !"org.eclipse.justj.model".equals(key) && !"org.eclipse.update.feature.plugin".equals(key)
+						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_GROUP.equals(key)
+						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_FRAGMENT.equals(key)
+						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_PRODUCT.equals(key)
 						&& !IInstallableUnit.PROP_BUNDLE_LOCALIZATION.equals(key)
 						&& !IInstallableUnit.PROP_DESCRIPTION.equals(key)
 						&& !IInstallableUnit.PROP_DESCRIPTION_URL.equals(key)
