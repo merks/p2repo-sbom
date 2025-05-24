@@ -1,0 +1,58 @@
+pipeline {
+  agent any
+
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+    timeout(time: 10, unit: 'MINUTES')
+  }
+ 
+  environment {
+    MAIL_TO = 'ed.merks@gmail.com'
+  }
+
+  stages {
+    stage('SBOM Promote Website') {
+      steps {
+          sh '''
+            set -o pipefail
+            LOGIN="genie.cbi@projects-storage.eclipse.org"
+            DOWNLOAD_PATH="/home/data/httpd/download.eclipse.org/cbi/"
+            
+            ls -sail www
+            
+            function update() {
+              local local_dir="${1:-}"
+              local remote_dir="${2:-}"
+              scp -r ${local_dir} ${LOGIN}:${remote_dir}.new
+              ssh ${LOGIN} << EOF
+                if [ -d ${remote_dir} ]; then
+                  rm -rf ${remote_dir}.old
+                  mv ${remote_dir} ${remote_dir}.old
+                fi
+                mv ${remote_dir}.new ${remote_dir}
+                rm -rf ${remote_dir}.old
+              EOF
+            }
+            
+            update www ${DOWNLOAD_PATH}/sbom
+          '''
+      }
+    }
+  }
+
+  post {
+    failure {
+      mail to: env.MAIL_TO,
+      subject: "[SBOM Generator] Build Failure ${currentBuild.fullDisplayName}",
+      mimeType: 'text/html',
+      body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
+    }
+
+    fixed {
+      mail to: env.MAIL_TO,
+      subject: "[SBOM Generator] Back to normal ${currentBuild.fullDisplayName}",
+      mimeType: 'text/html',
+      body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
+    }
+  }
+}
