@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>SBOM | Eclipse Foundation</title>
+	<meta name="keywords" content="eclipse,sbom" />
+	<link rel="icon" type="image/ico" href="favicon.ico" />
+	<!--
+	<link rel="preconnect stylesheet" href="../project.css" />
+	<script src="../project.js"></script>
+	<script src="project.js"></script>
+	-->
+	<style>
+		/* <![CDATA[*/
+		body {
+			font-family: Arial, Helvetica, sans-serif;
+			font-size: 10pt;
+			margin: 8px;
+		}
+
+		fieldset {
+			margin: 0px;
+			padding: 5px;
+			white-space: nowrap;
+		}
+
+		fieldset img {
+			margin-bottom: -0.2em;
+		}
+
+		.input-section {
+			margin: 1em 0em;
+		}
+
+		#inputs {
+			margin-bottom: 1.2em;
+		}
+
+		#filters {
+			position: sticky;
+			top: 0px;
+			background-color: white;
+			margin-top: -8px;
+		}
+
+		hr {
+			background-color: #eee;
+			border: none;
+			color: darkgray;
+			height: 2px;
+		}
+
+		.toggle {
+			color: #f7941e;
+			background-color: white;
+			/* margin-left: 1em; */
+			border: none;
+			padding: 0px 0px
+		}
+
+		.incoming-dependency,
+		.outgoing-dependency,
+		.purl,
+		.license,
+		.hash,
+		.property,
+		.reference,
+		.detail {
+			margin-left: 1.5em;
+		}
+
+		.bom-property-key {
+			font-weight: bold;
+			color: darkblue;
+		}
+
+		.bom-property-value {
+			color: darkgreen;
+		}
+
+		.bom-property-punctuation {
+			font-weight: bold;
+		}
+
+		.label-version {
+			color: darkred;
+			font-size: 80%;
+		}
+
+		.label-group {
+			color: darkcyan;
+			font-size: 80%;
+		}
+
+		.purl-scheme {
+			font-size: 50%;
+			padding: 0.3em 0.4em;
+			color: white;
+			background: firebrick;
+		}
+
+		.purl-group {
+			color: darkcyan;
+			font-size: 80%;
+		}
+
+		.purl-version {
+			color: darkred;
+		}
+
+		.purl-key {
+			font-weight: bold;
+			color: darkblue;
+			font-size: 66%;
+		}
+
+		.purl-value {
+			color: darkgreen;
+			font-size: 80%;
+		}
+
+		.purl-punctuation {
+			font-size: 66%;
+		}
+
+		.license-id,
+		.license-name {
+			color: rebeccapurple;
+			font-size: 80%;
+		}
+
+		.license-url,
+		.license-url>a {
+			color: firebrick;
+			font-size: 90%;
+			text-decoration: none;
+		}
+
+		.hash {
+			font-size: 75%;
+		}
+
+		.hash span {
+			color: darkslateblue;
+			background-color: aliceblue;
+			padding: 0.01em 0.2em;
+			cursor: copy;
+		}
+
+		.property-name {
+			font-weight: bold;
+			color: darkblue;
+			font-size: 66%;
+		}
+
+		.property-punctuation {
+			font-size: 66%;
+		}
+
+		.property-value {
+			color: darkgreen;
+			font-size: 80%;
+		}
+
+		.reference-type {
+			font-weight: bold;
+			color: darkblue;
+			font-size: 66%;
+		}
+
+		.reference-punctuation {
+			font-size: 66%;
+		}
+
+		.reference-url,
+		.reference-url>a {
+			color: firebrick;
+			font-size: 90%;
+			text-decoration: none;
+		}
+
+		.detail {
+			margin-top: 0.2em;
+		}
+
+		.detail>.icon {
+			float: left;
+			padding-right: 0.2em;
+		}
+
+		.detail-description {
+			min-width: 20em;
+			max-width: 50em;
+			display: inline-block;
+			color: darkslategray;
+			font-family: 'Times New Roman', Times, serif;
+			white-space: initial;
+		}
+
+		.detail-description>hr {
+			margin: 0.2em 0em;
+		}
+
+		.icon {
+			margin-bottom: -0.2em;
+		}
+
+		:target {
+			border-style: solid;
+			border-width: 1px;
+		}
+
+		.loader {
+			border: 3px solid #f3f3f3;
+			border-top: 3px solid #3498db;
+			border-radius: 50%;
+			width: .5em;
+			height: .5em;
+			animation: spin 2s linear infinite;
+		}
+
+		#busy-indicaator {
+			margin-left: 2em;
+		}
+
+		#error-message {
+			margin: 1em 0;
+			color: firebrick;
+		}
+
+		@keyframes spin {
+			0% {
+				transform: rotate(0deg);
+			}
+
+			100% {
+				transform: rotate(360deg);
+			}
+		}
+
+		.scrollup {
+			background: url(back-to-top.png) no-repeat;
+			bottom: 50px;
+			display: none;
+			height: 40px;
+			opacity: .3;
+			position: fixed;
+			right: 16px;
+			text-indent: -9999px;
+			width: 40px;
+		}
+
+		/*]]>*/
+	</style>
+	<script>
+		//<![CDATA[
+
+		const collapsed = '\u25B7';
+		const expanded = '\u25E2';
+		// &#x25B7;
+		// &#x25E2;
+
+		const pattern = /pkg:(?<scheme>[^/]+)\/((?<group>[^/]+)\/)?(?<name>[^&]+)@(?<version>[^/]+)(?<query>\?.*)/;
+
+		const componentMap = new Map();
+		const incomingDependencyMap = new Map();
+		const outgoingDependencyMap = new Map();
+		const brokenDependencies = new Map();
+		const bomProperties = new Map();
+
+		function toElements(text) {
+			const wrapper = document.createElement('div');
+			wrapper.innerHTML = text;
+			return wrapper.children
+		}
+
+		function copyToClipboard(text) {
+			navigator.clipboard.writeText(text);
+		}
+
+		function isFiltered(element) {
+			return element.getAttribute('data-filtered') == 'true';
+		}
+
+		function setFiltered(element, filtered) {
+			element.setAttribute('data-filtered', filtered);
+		}
+
+		function isShowing(element) {
+			return element.getAttribute('data-showing') == 'true';
+		}
+
+		function setShowing(element, filtered) {
+			element.setAttribute('data-showing', filtered);
+		}
+
+		function generateButton(all) {
+			return `<button ${all ? 'id="all"' : ''} class="toggle" onclick="${all ? 'toggleAll' : 'toggle'}(this)">${collapsed}</button>`;
+			// &#x25B7;
+			// &#x25E2;
+			// &#x25E2;
+		}
+
+		function toggleAll(button) {
+			setBusy(true);
+			window.setTimeout(() => {
+				doToggleAll(button);
+				setBusy(false);
+			},
+				100);
+		}
+
+		function doToggleAll(button) {
+			const newState = button.innerText == collapsed ? expanded : collapsed;
+			if (button.id == 'all') {
+				const span = button.parentElement.querySelector('#all + span');
+				span.textContent = newState == expanded ? ' Collapse All' : ' Expand All';
+			}
+			button.innerText = newState;
+			for (const b of (button.id == 'all' ? document : button.parentElement).querySelectorAll('button')) {
+				if (b != button) {
+					setToggleButtonState(b, newState);
+				}
+			}
+		}
+
+		function toggle(button) {
+			setToggleButtonState(button, button.innerText == collapsed ? expanded : collapsed);
+		}
+
+		function setToggleButtonState(button, state) {
+			if (button instanceof Element) {
+				let style;
+				button.innerText = state;
+				if (state == collapsed) {
+					style = 'none';
+				} else {
+					style = 'block';
+				}
+				for (const div of button.parentElement.querySelectorAll('div')) {
+					setShowing(div, style == 'block');
+					if (!isFiltered(div)) {
+						div.style.display = style;
+					}
+				}
+			}
+		}
+
+		function getDependencyElements(dependenciesMap, component, type) {
+			const dependencies = dependenciesMap.get(component);
+			return dependencyElements = dependencies.map(dep => {
+				const bomRef = getModelValue(dep, 'bom-ref');
+				const label = getComponentLabel(dep);
+				return `<div class="${type}" style="display:none">${getIcon(type + '.svg')} <a href="#${bomRef}">${label}</a></div>`;
+			});
+		}
+
+		function getPurlElement(component) {
+			const purl = getModelValue(component, 'purl');
+			const x = typeof purl;
+			if (purl != null) {
+				const match = pattern.exec(purl);
+				if (match != null) {
+					const scheme = match.groups['scheme'];
+					const group = match.groups['group'];
+					const name = match.groups['name'];
+					const version = match.groups['version'];
+					const query = match.groups['query'];
+					const params = [];
+					if (query != null) {
+						const searchParams = new URLSearchParams(query);
+						params.push(...searchParams.entries().map(entry =>
+							`<span class="purl-key">${entry[0]}</span><span class="purl-punctuation">=</span><span class="purl-value">${entry[1]}</span>`));
+					}
+
+					return [`<div class="purl" style="display:none">
+${getIcon('purl.svg')}
+<span class="purl-scheme">${scheme}</span>
+${group == null ? '' : `<span class="purl-group">${group}</span><span class="purl-punctuation"> / </span>`}
+<span class="purl-name">${name}</span>
+<span class="purl-punctuation"> @ </span>
+<span class="purl-version">${version}</span>
+${params.length > 0 ? '<span class="purl-punctuation"> ? </span>' : ''}
+${params.join('<span class="purl-punctuation"> &amp; </span>\n')}
+ </div>`];
+				} else {
+					console.log(purl);
+				}
+			}
+			return [];
+		}
+
+		function getReferenceElements(component) {
+			const references = getModelValue(component, 'externalReferences', []);
+			if (references != null) {
+				return references.map(reference => `<div class="reference" style="display:none">
+<img class="icon" src="reference.svg"/>${getReferenceElementDetail(reference)}
+</div>`);
+			}
+			return [];
+		}
+
+		function getReferenceElementDetail(reference) {
+			const type = getModelValue(reference, 'type');
+			const url = getModelValue(reference, 'url');
+			let actualURL = type == 'vcs' && url != null && url.indexOf('http') > 0 ? url.substring(url.indexOf('http')) : url;
+			// https://github.com/eclipse-platform/eclipse.platform.git?path=ant/org.eclipse.ant.core&tag=I20250304-0640&commitId=f928ecce547595cd272cb5ef6b5fabd58223e17d
+			// /https:\/\/github.com\/([^/]+)\/([^/]+)/.exec(actualURL);
+			if (actualURL.startsWith('https://github.com/') && actualURL.indexOf('?') != -1) {
+				const gitHubURL = new URL(actualURL);
+				const commitId = gitHubURL.searchParams.get('commitId');
+				const path = gitHubURL.searchParams.get('path');
+				if (path != null && commitId != null) {
+					actualURL = `${gitHubURL.origin}${gitHubURL.pathname.replace(/\.git$/, '')}/tree/${commitId}/${path}`;
+				}
+			}
+			return `<span class="reference-type">${type}</span><span class="reference-punctuation">: </span><span class="reference-url"><a href="${actualURL}">${url}</a></span>`;
+		}
+
+
+		function getDetailElements(component) {
+			const publisher = getModelValue(component, 'publisher');
+			const description = getModelValue(component, 'description');
+			if (publisher != null || description != null) {
+				const publisherDetail = publisher == null ? '' : `<span class="detail-provider">Provider: ${publisher}</span><hr/>`;
+				return [`<div class="detail" style="display:none">
+<img class="icon" src="detail.svg"/>
+<span class="detail-description">
+${publisherDetail}
+${description.replace(' - \u200B', '<hr/>')}
+</span>
+</div>`];
+			}
+			return [];
+		}
+
+		function getPropertyElements(component) {
+			const properties = getModelValue(component, 'properties');
+			if (properties != null) {
+				return properties.map(property => `<div class="property" style="display:none">
+<img class="icon" src="property.svg"/>
+${getPropertyElementDetail(property)}
+</div>`);
+			}
+			return [];
+		}
+
+		function getPropertyElementDetail(property) {
+			const name = getModelValue(property, 'name');
+			const value = getModelValue(property, 'value');
+			return `<span class="property-name">${name}</span><span class="property-punctuation">=</span><span class="property-value">${value}</span>`;
+		}
+
+		function getHashElements(component) {
+			const hashes = getModelValue(component, 'hashes');
+			if (hashes != null) {
+				const details = hashes.map(hash => {
+					const alg = getModelValue(hash, 'alg');
+					const content = getModelValue(hash, 'content');
+					return `<span title="${content}" onclick="copyToClipboard(this.title)")>${alg}</span>`
+				});
+				return [`<div class="hash" style="display:none">
+<img class="icon" src="hash.svg"/>
+${details.join('\n')}
+</div>` ];
+			}
+			return [];
+		}
+
+		function getLicenseElements(component) {
+			const licenses = getModelValue(component, 'licenses');
+			if (licenses != null) {
+				return licenses.map(license => `<div class="license" style="display:none">
+<img class="icon" src="license.svg"/>
+${getLicenseElementDetail(license)}
+</div>`);
+			}
+			return [];
+		}
+
+		function getLicenseElementDetail(license) {
+			const id = getModelValue(license, 'id');
+			const name = getModelValue(license, 'name');
+			const url = getModelValue(license, 'url');
+			let result = '';
+			if (id != null) {
+				result += `<span class="license-id">${id}</span>`;
+			}
+			if (name != null) {
+				if (result.length > 0) {
+					result += ' - ';
+				}
+				result += `<span class="license-name">${name}</span>`;
+			}
+			if (url != null) {
+				if (result.length > 0) {
+					result += ' - ';
+				}
+				const links = url.split(/[ ,]+/);
+				for (const link of links) {
+					result += `<span class="license-url"><a href="${url}">${url}</a></span>`;
+				}
+			}
+			if (result.length == 0) {
+				console.log(license.innerHTML);
+			}
+			return result;
+		}
+
+		function getComponentLabel(component) {
+			const scope = getModelValue(component, 'scope');
+			const group = getModelValue(component, 'group');
+			const name = getModelValue(component, 'name');
+			const version = getModelValue(component, 'version');
+			const groupElement = group == null ? '' : ` - <span class="label-group">${group}</span>`;
+			return `<span class="label"><span class="label-name">${name}</span> <span class="label-version">${version}</span>${groupElement}</span>`;
+		}
+
+
+		function getComponentIcon(component) {
+			const classifier = getComponentClassifier(component);
+			if (classifier == 'binary') {
+				return getIcon('binary.svg');
+			}
+			if (classifier == 'metadata') {
+				return getIcon('metadata.svg');
+			}
+			if (classifier == 'feature') {
+				return getIcon('feature.svg');
+			}
+			if (classifier == 'bundle') {
+				return getIcon('bundle.svg');
+			}
+			const svg = 'library.svg'
+			return getIcon(svg);
+		}
+
+		function getIcon(svg) {
+			return `<img class="icon" src="${svg}" alt="${svg}"/>`;
+		}
+
+		function getComponentClassifier(component) {
+			let extClassifier = component.extClassifier
+			if (extClassifier == null) {
+				const purl = getModelValue(component, 'purl');
+				if (purl != null) {
+					const searchParams = new URLSearchParams(new URL(purl).searchParams);
+					extClassifier = searchParams.get('classifier');
+					if (extClassifier == null && searchParams.get('type') == 'jar') {
+						extClassifier = 'bundle';
+					}
+				}
+
+				if (extClassifier == null) {
+					extClassifier = 'unknown';
+				}
+
+				if (extClassifier == 'org.eclipse.update.feature') {
+					extClassifier = 'feature';
+				}
+
+				if (extClassifier == 'osgi.bundle') {
+					extClassifier = 'bundle';
+				}
+
+				Object.defineProperty(component, 'extClassifier', {
+					value: extClassifier
+				})
+			}
+			return extClassifier;
+		}
+
+		function getModelValue(model, property, defaultValue) {
+			if (model instanceof Element) {
+				if (property == 'bomFormat') {
+					return /^https?:\/\/cyclonedx.org\/schema\/bom\/[^\/]+$/.test(model.namespaceURI) ? 'CycloneDX' : model.namespaceURI;
+				} else if (property == 'specVersion') {
+					return /^.*\/(?<version>[^\/]+)$/.exec(model.namespaceURI).groups.version;
+				} else if (property == 'dependsOn') {
+					const elements = model.getElementsByTagName('dependency');
+					return [...elements].map(element => element.getAttribute('ref'));
+				}
+
+				const attributeValue = model.getAttribute(property);
+				if (attributeValue != null) {
+					return attributeValue;
+				}
+
+				const elements = model.querySelectorAll(`:scope > ${property}`);
+				if (elements.length == 1) {
+					const element = elements.item(0);
+					const children = element.children;
+					if (children.length == 0 && !(defaultValue instanceof Array)) {
+						return element.textContent;
+					}
+					return [...children];
+				}
+
+				if (model.localName == 'property' && property == 'value') {
+					return model.textContent;
+				}
+			} else {
+				const value = model[property];
+				if (value != null) {
+					return value;
+				}
+
+				const license = model['license'];
+				if (license != null) {
+					return license[property];
+				}
+			}
+
+			return defaultValue;
+		}
+
+		function buildModel(sbom) {
+			bomProperties.set('version', getModelValue(sbom, 'version'));
+			bomProperties.set('bom-format', getModelValue(sbom, 'bomFormat'));
+			bomProperties.set('spec-version', getModelValue(sbom, 'specVersion'));
+			bomProperties.set('serial-number', getModelValue(sbom, 'serialNumber'));
+
+			for (const component of getModelValue(sbom, 'components', [])) {
+				const bomRef = getModelValue(component, 'bom-ref');
+				componentMap.set(bomRef, component);
+				outgoingDependencyMap.set(component, []);
+			}
+
+			for (const dependency of getModelValue(sbom, 'dependencies', [])) {
+				const ref = getModelValue(dependency, 'ref');
+				const component = componentMap.get(ref);
+				if (component == null) {
+					continue;
+				}
+				const incomingDependencies = getModelValue(dependency, 'dependsOn', []);
+				incomingDependencyMap.set(component, [...incomingDependencies].map(ref => {
+					const incomingComponent = componentMap.get(ref)
+					if (incomingComponent == null) {
+						return null;
+					}
+
+					outgoingDependencyMap.get(incomingComponent).push(component);
+					return incomingComponent;
+				}).filter(component => component != null));
+			}
+		}
+
+		function getQueryParameter(id) {
+			const location = new URL(window.location);
+			const search = new URLSearchParams(location.search);
+			return search.get(id);
+		}
+
+		function onload() {
+			changeInputType();
+
+			addEventListener(document.getElementById('form'));
+
+			const labels = document.querySelectorAll('#filters label');
+			for (const label of labels) {
+				const element = document.getElementById(label.getAttribute('for'));
+				label.ondblclick = element.ondblclick;
+			}
+
+			const search = document.getElementById('search');
+			search.addEventListener('keyup', event => {
+				if (event.key == 'Enter') {
+					filter();
+				}
+			});
+
+			const file = getQueryParameter('file');
+			if (file != null) {
+				generateContent(file);
+			}
+		}
+
+		function doubleClick(element) {
+			const filters = element.parentElement.querySelectorAll('.filter');
+			const elementFilter = element.tagName.toLowerCase() == 'label' ? document.getElementById(element.getAttribute('for')) : element;
+			for (const otherFilter of filters) {
+				otherFilter.checked = otherFilter == elementFilter;
+			}
+
+			filter();
+		}
+
+		function changeInputType() {
+			const inputTypes = document.querySelectorAll('.input-type');
+			for (const inputType of inputTypes) {
+				const inputSection = document.getElementById(`${inputType.id}-section`);
+				inputSection.style.display = inputType.checked ? 'block' : 'none';
+			}
+		}
+
+		function filter() {
+			setBusy(true);
+			window.setTimeout(() => {
+				doFilter();
+				setBusy(false);
+			},
+				100);
+		}
+
+		function doFilter() {
+			const filters = document.querySelectorAll('.filter');
+			let show = 'show-all';
+			for (const filter of filters) {
+				const id = filter.id;
+				const checked = filter.checked;
+				if (id.startsWith('show-')) {
+					if (checked) {
+						show = id;
+					}
+					continue;
+				}
+				const elements = document.querySelectorAll('.' + id);
+				for (const element of elements) {
+					setFiltered(element, !checked);
+					if (isShowing(element)) {
+						element.style.display = checked ? 'block' : 'none';
+					}
+				}
+			}
+
+			const search = document.getElementById('search');
+			const pattern = search.value;
+
+			const toggles = document.querySelectorAll('.toggle');
+			for (const toggle of toggles) {
+				const parent = toggle.parentElement;
+				if (parent.id != 'formatted-target' && toggle.id != 'all') {
+					const visibleChildren = toggle.parentElement.querySelectorAll('div[data-filtered=false]');
+					const opacity = visibleChildren.length == 0 ? 0 : 1;
+					toggle.style.opacity = opacity;
+
+					const label = parent.querySelector('.label-name').textContent;
+					const searchMatch = label.indexOf(pattern) != -1;
+
+					const hidden = !searchMatch || (show == 'show-with-children' && opacity == 0 || show == 'show-without-children' && opacity == 1);
+					if (!isFiltered(parent)) {
+						setFiltered(parent, !hidden);
+						parent.style.display = hidden ? 'none' : 'block';
+					}
+				}
+			}
+		}
+
+		function setBusy(on) {
+			const busyIndicator = document.getElementById('busy-indicator');
+			if (busyIndicator != null) {
+				const display = on ? 'inline-block' : 'none';
+				if (busyIndicator.style.display != display) {
+					busyIndicator.style.display = display;
+					if (on) {
+						if (form.clientHeight != 0) {
+							doit();
+						}
+					}
+				}
+			}
+		}
+
+		function doit() {
+			if (form.clientHeight != 0) {
+				window.requestAnimationFrame(doit);
+			} else {
+				setBusy(false);
+			}
+		};
+
+		function generateContent(file) {
+			componentMap.clear();
+			incomingDependencyMap.clear();
+			outgoingDependencyMap.clear();
+			bomProperties.clear();
+
+			const target = document.getElementById('target');
+
+			const fieldset = document.getElementById('filters');
+
+			document.getElementById('expand-all-section')?.remove();
+			fieldset.append(...toElements(`
+<div id="expand-all-section" style="font-size: 110%">
+	<div id="summary" style="display: none">
+	<hr>
+	</div>
+	<hr>
+	${generateButton('all')}<span> Expand All</span>
+	<div id="busy-indicator" style="display: none">
+		<div class="loader"></div>
+	</div>
+</div>
+`));
+			setBusy(true);
+
+			try {
+				if (file != null) {
+					setInputURL(file);
+				} else if (document.getElementById('input-file').checked) {
+					const fileInput = form['sbom-file'];
+					const files = fileInput.files;
+					if (files != null && files.length == 1) {
+						setInputFile(files[0]);
+					} else {
+						throw "No file specified";
+					}
+				} else if (document.getElementById('input-url').checked) {
+					const urlInput = form['sbom-url'];
+					setInputURL(urlInput.value);
+				} else {
+					if (false) {
+						(async () => {
+							const fileContent = await xxxxxx.text();
+							console.log('.text()', fileContent);
+
+							const fileContentStream = await file.stream();
+							console.log('.stream()', await streamToText(fileContentStream));
+
+							// const buffer = await file.arrayBuffer();
+							// console.log('.buffer()', bufferToText(buffer));
+
+							// const fileSliceBlob = file.slice(0, file.length);
+							// const fileSliceBlobStream = await fileSliceBlob.stream();
+							// console.log('.slice() and .stream()', await streamToText(fileSliceBlobStream));
+						})();
+					}
+
+					const sbomInput = form['sbom-input'].value.trim();
+					setInput(sbomInput);
+				}
+			} catch (err) {
+				handleError(err);
+			}
+		}
+
+		function handleError(err) {
+			setBusy(false);
+			const expandAllSection = document.getElementById('expand-all-section');
+			expandAllSection?.remove();
+			const errorMessage = document.getElementById('error-message');
+			if (err instanceof Element) {
+				errorMessage.appendChild(err);
+			} else {
+				errorMessage.innerText = err;
+			}
+			errorMessage.style.display = 'block';
+		}
+
+		function addEventListener(form) {
+			form.addEventListener('submit', event => {
+				event.preventDefault();
+				const errorMessage = document.getElementById('error-message');
+				errorMessage.innerText = '';
+				generateContent();
+			});
+		}
+
+		async function setInputURL(url) {
+			fetch(url).then(response => {
+				try {
+					return response.text();
+				} catch (err) {
+					handleError(err);
+				}
+			}).then(text => {
+				try {
+					setInput(text);
+				} catch (err) {
+					handleError(err);
+				}
+			}).catch(err => handleError(err));
+		}
+
+		async function setInputFile(file) {
+			const fileContent = await file.text();
+			try {
+				setInput(fileContent);
+			} catch (err) {
+				handleError(err);
+			}
+		}
+
+		function setInput(sbomInput) {
+			if (sbomInput.startsWith('<')) {
+				const sbom = new DOMParser().parseFromString(sbomInput, 'text/xml');
+				const documentElement = sbom.documentElement;
+				const name = documentElement.localName;
+				if (name == 'parsererror') {
+					throw documentElement;
+				} else if (name != 'bom') {
+					throw `Expecting a root element named sbom not ${name}`;
+				}
+				// target.innerText = sbom.documentElement.outerHTML;
+				buildModel(sbom.documentElement);
+			} else {
+				const sbom = JSON.parse(sbomInput);
+				buildModel(sbom);
+			}
+
+			const components = [...componentMap.values()].filter(component => {
+				getComponentClassifier(component);
+				return true;
+			}).sort((a, b) => {
+				const x = getComponentClassifier(a);
+				const y = getComponentClassifier(b);
+				return x.localeCompare(y) || getModelValue(a, 'name').localeCompare(getModelValue(b, 'name'));
+			});
+
+			const componentElements = components.map(component => {
+				const purlElements = getPurlElement(component);
+
+				const licenseElements = getLicenseElements(component);
+				const hashElements = getHashElements(component);
+				const propertyElements = getPropertyElements(component);
+				const references = getReferenceElements(component);
+				const detailElements = getDetailElements(component);
+
+				const incomingDependencyElements = getDependencyElements(incomingDependencyMap, component, 'incoming-dependency');
+				const outgoingDependencyElements = getDependencyElements(outgoingDependencyMap, component, 'outgoing-dependency');
+
+				return `<div style="white-space: nowrap;" id=${getModelValue(component, 'bom-ref')} class="${getComponentClassifier(component)}" data-showing="true">
+${generateButton()}<span class="label">&nbsp;${getComponentIcon(component)} ${getComponentLabel(component)}<span>
+${purlElements.join('\n')}
+${licenseElements.join('\n')}
+${hashElements.join('\n')}
+${propertyElements.join('\n')}
+${references.join('\n')}
+${detailElements.join('\n')}
+${incomingDependencyElements.join('\n')}
+${outgoingDependencyElements.join('\n')}
+</div>`;
+			});
+
+			const formattedTarget = document.getElementById('formatted-target');
+			formattedTarget.innerHTML = `
+${componentElements.join('\n')}
+<a class="scrollup" onclick="scrollToTop()">Back to the top</a>
+`;
+
+			doFilter();
+
+			const summary = document.getElementById('summary');
+			const properties = bomProperties.entries().map(([key, value]) =>
+				`<span class="bom-property-key">${key}</span><span class="bom-property-punctuation">:</span> <span class="bom-property-value">${value}</span>`
+			).toArray();
+			summary.innerHTML += properties.join('<span  class="bom-property-punctuation">,</span>\n');
+			summary.style.display = 'block';
+
+			form.parentElement.style.display = 'none';
+		}
+
+		function scrollToTop() {
+			window.scrollTo({top: 0, behavior: 'smooth'});
+		}
+
+		function locationHashChanged(event) {
+			event.preventDefault();
+			const hash = document.location.hash;
+			if (hash.length > 1) {
+				const element = document.getElementById(hash.substring(1));
+				if (element != null) {
+					const fieldSet = document.getElementById('filters');
+					const height = fieldSet.clientHeight;
+					window.scrollBy(0, -height - 2);
+				}
+			}
+		}
+
+		window.onhashchange = locationHashChanged;
+
+		window.onscroll = function () {
+			const footer = document.querySelector(".scrollup");
+			if (footer != null) {
+				footer.style.display = document.documentElement.scrollTop > 100 ? 'inline' : 'none';
+			}
+		};
+
+		//]]>
+	</script>
+</head>
+
+<body onload="onload()">
+
+	<main>
+		<fieldset id="inputs">
+			<form id="form">
+				<input class="input-type" type="radio" id="input-text" name="input" onclick="changeInputType()" checked />
+				<label for="input-text">SBOM Text</label>
+
+				<input class="input-type" type="radio" id="input-file" name="input" onclick="changeInputType()" />
+				<label for="input-file">SBOM File</label>
+
+				<input class="input-type" type="radio" id="input-url" name="input" onclick="changeInputType()" />
+				<label for="input-url">SBOM URL</label>
+
+				<div class="input-section" id="input-text-section">
+					<!--
+				<label for="sbom-input">Enter SBOM Text</label><br />
+				-->
+					<textarea id="sbom-input" name="sbom-input" rows="8" cols="150"></textarea>
+				</div>
+
+				<div class="input-section" id="input-file-section">
+					<input id="sbom-file" type="file">
+				</div>
+
+				<div class="input-section" id="input-url-section">
+					<input id="sbom-url" type="url" pattern="https?://.*" size="120">
+				</div>
+
+				<div>
+					<input type="submit" value="Submit">
+				</div>
+
+				<div id="error-message" style="display : none;">
+				</div>
+			</form>
+		</fieldset>
+
+		<!--
+		&#x25B7;
+		&#x25E2;
+		-->
+
+		<fieldset id="filters">
+			<div>
+				<input class="filter" type="checkbox" id="binary" name="binary" onclick="filter()" ondblclick="doubleClick(this)" checked />
+				<label for="binary"><img src="binary.svg" /> Binary</label>
+
+				<input class="filter" type="checkbox" id="bundle" name="bundle" onclick="filter()" ondblclick="doubleClick(this)" checked />
+				<label for="bundle"><img src="bundle.svg" /> Bundle</label>
+
+				<input class="filter" type="checkbox" id="feature" name="feature" onclick="filter()" ondblclick="doubleClick(this)" checked />
+				<label for="feature"><img src="feature.svg" /> Feature</label>
+
+				<input class="filter" type="checkbox" id="metadata" name="metadata" onclick="filter()" ondblclick="doubleClick(this)" checked />
+				<label for="metadata"><img src="metadata.svg" /> Metadata</label>
+			</div>
+
+			<br />
+
+			<div>
+				<img src="filter.svg" /> <input class="xsearch" type="search" placeholder=".*" id="search" name="xshow" xonclick="filter()" size="50" />
+			</div>
+
+			<br />
+
+			<div>
+				<input class="filter" type="radio" id="show-all" name="show" onclick="filter()" checked />
+				<label for="show-all">All</label>
+
+				<input class="filter" type="radio" id="show-with-children" name="show" onclick="filter()" />
+				<label for="show-with-children">With Children</label>
+
+				<input class="filter" type="radio" id="show-without-children" name="show" onclick="filter()" />
+				<label for="show-without-children">Without Children</label>
+				<br />
+
+				<hr />
+
+				<div>
+
+					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies</label>
+
+					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies</label>
+
+					<br />
+
+					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="purl"><img src="purl.svg" /> PURLs</label>
+
+					<br />
+
+					<input class="filter" type="checkbox" id="hash" name="hash" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="hash"><img src="hash.svg" /> Hash Sums</label>
+
+					<br />
+
+					<input class="filter" type="checkbox" id="license" name="license" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="license"><img src="license.svg" /> Licenses</label>
+
+					<br />
+
+					<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="property"><img src="property.svg" /> Properties</label>
+
+					<br />
+
+					<input class="filter" type="checkbox" id="reference" name="reference" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="reference"><img src="reference.svg" /> External References</label>
+
+					<br />
+
+					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="detail"><img src="detail.svg" /> Detail</label>
+
+				</div>
+
+
+				<!--
+				<div id="busy-indicator" style="display: none">
+					<hr />
+					<div class="loader"></div>
+				</div>
+				-->
+
+
+		</fieldset>
+
+		<pre id="target"></pre>
+		<div id="formatted-target"></div>
+	</main>
+
+	<script>
+	</script>
+</body>
+
+</html>

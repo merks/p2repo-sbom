@@ -91,6 +91,10 @@
     </setupTask>
   </setupTask>
   <setupTask
+      xsi:type="setup:PreferenceTask"
+      key="/instance/org.eclipse.wildwebdeveloper/html.format.wrapLineLength"
+      value="0"/>
+  <setupTask
       xsi:type="jdt:JRETask"
       version="JavaSE-21"
       location="${jre.location-21}">
@@ -138,6 +142,15 @@
     <repository
         url="https://download.eclipse.org/releases/${eclipse.target.platform}"/>
     <description>Install the tools needed in the IDE to work with the source code for ${scope.project.label}</description>
+  </setupTask>
+  <setupTask
+      xsi:type="setup.p2:P2Task"
+      label="WildWeb">
+    <requirement
+        name="org.eclipse.wildwebdeveloper.feature.feature.group"
+        optional="true"/>
+    <repository
+        url="https://download.eclipse.org/wildwebdeveloper/releases/latest"/>
   </setupTask>
   <setupTask
       xsi:type="git:GitCloneTask"
