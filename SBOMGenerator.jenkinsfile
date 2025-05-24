@@ -14,10 +14,24 @@ pipeline {
   environment {
     MAIL_TO = 'ed.merks@gmail.com'
   }
+ 
+  parameters {
+    text(
+      name: 'UPDATE_SITES',
+      defaultValue: "https://download.eclipse.org/oomph/products/latest/repository",
+      description: """${pretty(
+        '''
+        Update sites to analyze.
+        '''
+      )}""")  }
+
 
   stages {
     stage('SBOM Generator') {
       steps {
+          script {
+            env.UPDATE_SITES = params.UPDATE_SITES
+          }
           sh '''
             set -o pipefail
 
@@ -29,9 +43,9 @@ pipeline {
               -consoleLog \
               -noSplash \
               -verbose \
-              -input https://download.eclipse.org/eclipse/updates/4.34/R-4.34-202411201800 \
-              -xml-output eclipse-sdk-4.34-sbom.xml \
-              -json-output eclipse-sdk-4.34-sbom.json \
+              -input ${UPDATE_SITES} \
+              -xml-output bom.xml \
+              -json-output bom.json \
               -vmargs \
                 -Dfile.encoding=UTF-8 2>&1 | tee log
           '''
@@ -60,4 +74,8 @@ pipeline {
       body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
     }
   }
+}
+
+def pretty(string) {
+  return string.replaceAll("^\r?\n", "").replaceAll("\r?\n\$", "").replace("\r", "").stripIndent()
 }
