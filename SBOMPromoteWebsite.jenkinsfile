@@ -17,9 +17,7 @@ pipeline {
             set -o pipefail
             LOGIN="genie.cbi@projects-storage.eclipse.org"
             DOWNLOAD_PATH="/home/data/httpd/download.eclipse.org/cbi/"
-            
-            ls -sail www
-            
+
             function update() {
               local local_dir="${1:-}"
               local remote_dir="${2:-}"
@@ -33,7 +31,7 @@ pipeline {
                 rm -rf ${remote_dir}.old
               EOF
             }
-            
+
             update www ${DOWNLOAD_PATH}/sbom
           '''
       }
