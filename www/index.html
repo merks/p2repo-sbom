@@ -637,7 +637,8 @@ ${getLicenseElementDetail(license)}
 					return [...children];
 				}
 
-				if (model.localName == 'property' && property == 'value') {
+				if (model.localName == 'property' && property == 'value' ||
+					model.localName == 'hash' && property == 'content') {
 					return model.textContent;
 				}
 			} else {
