@@ -1142,12 +1142,21 @@ public class SBOMApplication implements IApplication {
 		}
 
 		public String getMavenPURL() {
-			return "pkg:maven/" + groupId + '/' + artifactId + '@' + version + "?type=" + type;
+			var qualifiers = new LinkedHashMap<String, String>();
+			if (!"jar".equals(type)) {
+				qualifiers.put("type", type);
+			}
+			if (classifier != null) {
+				qualifiers.put("classifier", classifier);
+			}
+			var query = qualifiers.isEmpty() ? ""
+					: qualifiers.entrySet().stream().map(Object::toString).collect(Collectors.joining("&", "?", ""));
+			return "pkg:maven/" + groupId + '/' + artifactId + '@' + version + query;
 		}
 
 		private URI toURI(String suffix) {
-			return URI.create("https://repo1.maven.org/maven2/" + groupId.replace('.', '/') + "/" + artifactId + "/"
-					+ version + "/" + artifactId + "-" + version + suffix);
+			return URI.create("https://repo.maven.apache.org/maven2/" + groupId.replace('.', '/') + "/" + artifactId
+					+ "/" + version + "/" + artifactId + "-" + version + suffix);
 		}
 	}
 
