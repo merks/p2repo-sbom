@@ -499,12 +499,12 @@ public class SBOMApplication implements IApplication {
 			}
 
 			var docURL = iu.getProperty(IInstallableUnit.PROP_DOC_URL, null);
-			if (docURL != null) {
+			if (docURL != null && docURL.startsWith("http")) {
 				addExternalReference(component, ExternalReference.Type.WEBSITE, docURL);
 			}
 
 			var descriptionURL = iu.getProperty(IInstallableUnit.PROP_DESCRIPTION_URL, null);
-			if (descriptionURL != null) {
+			if (descriptionURL != null && descriptionURL.startsWith("http")) {
 				addExternalReference(component, ExternalReference.Type.WEBSITE, descriptionURL);
 			}
 
@@ -887,7 +887,7 @@ public class SBOMApplication implements IApplication {
 			var websites = evaluate(document, "//pom:project|//project");
 			for (var element : websites) {
 				var url = getText(element, "url");
-				if (url != null) {
+				if (url != null && url.startsWith("http")) {
 					addExternalReference(component, ExternalReference.Type.WEBSITE, url);
 				}
 			}
