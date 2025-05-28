@@ -14,9 +14,9 @@ import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.ArgumentUtil.getArgume
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.ArgumentUtil.getArguments;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.addExternalReference;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.computeHash;
+import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createBomXMLGenerator;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createProperty;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.urlEncodeQueryParameter;
-import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createBomXMLGenerator;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.evaluate;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.getText;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.newDocumentBuilder;
@@ -30,6 +30,7 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandler;
 import java.net.http.HttpResponse.BodyHandlers;
@@ -55,6 +56,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -200,6 +202,9 @@ public class SBOMApplication implements IApplication {
 		private static final Pattern FEATURE_JAR_PATTERN = Pattern.compile("(.*\\.feature)\\.jar");
 
 		private static final Pattern SOURCE_IU_PATTERN = Pattern.compile("(.*)\\.source(\\.feature\\.group|)");
+
+		private static final Pattern GITHUB_SCM_PATTERN = Pattern
+				.compile("(scm:)?(git:)?https?://github\\.com/(?<repo>[^/]+/[^/]+?)(\\.git)?");
 
 		private final Set<String> rejectedURLs = new TreeSet<>();
 
@@ -715,6 +720,15 @@ public class SBOMApplication implements IApplication {
 														eclipseSourceReferenceElement.getAttribute(key))))
 										.collect(Collectors.joining("&", "?", ""));
 								addExternalReference(component, ExternalReference.Type.VCS, value + query);
+
+								Matcher matcher = GITHUB_SCM_PATTERN.matcher(value);
+								if (matcher.matches()) {
+									var uri = URI.create("https://github.com/" + matcher.group("repo") + "/issues");
+									if (contentHandler.exists(uri)) {
+										addExternalReference(component, ExternalReference.Type.ISSUE_TRACKER,
+												uri.toString());
+									}
+								}
 							}
 						}
 					} else if (MAVEN_POM_PATTERN.matcher(name).matches()) {
@@ -1221,6 +1235,8 @@ public class SBOMApplication implements IApplication {
 			}
 		}
 
+		private final Map<URI, Boolean> exists = new ConcurrentHashMap<>();
+
 		private final Path cache;
 
 		private final HttpClient httpClient;
@@ -1250,6 +1266,17 @@ public class SBOMApplication implements IApplication {
 			return response.body();
 		}
 
+		protected <T> T basicHead(URI uri, BodyHandler<T> bodyHandler) throws IOException, InterruptedException {
+			var requestBuilder = HttpRequest.newBuilder(uri).method("HEAD", BodyPublishers.noBody());
+			var request = requestBuilder.build();
+			var response = httpClient.send(request, bodyHandler);
+			var statusCode = response.statusCode();
+			if (statusCode != 200) {
+				throw new ContentHandlerException(response);
+			}
+			return response.body();
+		}
+
 		protected Path getCachePath(URI uri) {
 			var decodedURI = URLDecoder.decode(uri.toString(), StandardCharsets.UTF_8);
 			var uriSegments = decodedURI.split("[:/?#&;]+");
@@ -1263,6 +1290,22 @@ public class SBOMApplication implements IApplication {
 
 		interface Writer<T> {
 			void write(Path path, T t) throws IOException;
+		}
+
+		public boolean exists(URI uri) {
+			return exists.computeIfAbsent(uri, u -> {
+				try {
+					basicHead(uri, BodyHandlers.ofString());
+					return true;
+				} catch (ContentHandlerException e) {
+					if (e.getResponse().statusCode() == 404) {
+						return false;
+					}
+					throw new RuntimeException(e);
+				} catch (IOException | InterruptedException e) {
+					throw new RuntimeException(e);
+				}
+			});
 		}
 
 		public String getContent(URI uri) throws IOException {
