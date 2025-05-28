@@ -18,7 +18,7 @@
 			margin: 8px;
 		}
 
-		fieldset {
+		main>fieldset {
 			margin: 0px;
 			padding: 5px;
 			white-space: nowrap;
@@ -191,6 +191,24 @@
 			text-decoration: none;
 		}
 
+		.rh {
+			font-weight: bold;
+			color: rebeccapurple;
+		}
+
+		.rqp {
+			color: black;
+			padding: 0em .1em;
+		}
+
+		.rqk {
+			color: darkblue;
+		}
+
+		.rqv {
+			color: darkgreen;
+		}
+
 		.detail {
 			margin-top: 0.2em;
 		}
@@ -279,6 +297,8 @@
 		const outgoingDependencyMap = new Map();
 		const brokenDependencies = new Map();
 		const bomProperties = new Map();
+		const componentExternalReferenceTypes = new Set();
+		const componentPropertyNames = new Set();
 
 		function toElements(text) {
 			const wrapper = document.createElement('div');
@@ -380,7 +400,7 @@
 			if (scheme == 'maven') {
 				const repositoryURL = params.get('repository_url');
 				let url = repositoryURL == null ? 'https://repo.maven.apache.org/maven2' : repositoryURL;
-				url += '/' + group.replace('.', '/') + '/' + name + '/' + version + '/' + name + '-' + version;
+				url += '/' + group.replaceAll('.', '/') + '/' + name + '/' + version + '/' + name + '-' + version;
 				const classifier = params.get('classifier')
 				if (classifier != null) {
 					url += '-' + classifier;
@@ -441,8 +461,9 @@ ${artifactURL}
 		function getReferenceElements(component) {
 			const references = getModelValue(component, 'externalReferences', []);
 			if (references != null) {
-				return references.map(reference => `<div class="reference" style="display:none">
-<img class="icon" src="reference.svg"/>${getReferenceElementDetail(reference)}
+				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style="display:none">
+<img class="icon" src="reference.svg"/>
+${getReferenceElementDetail(reference)}
 </div>`);
 			}
 			return [];
@@ -450,6 +471,7 @@ ${artifactURL}
 
 		function getReferenceElementDetail(reference) {
 			const type = getModelValue(reference, 'type');
+			componentExternalReferenceTypes.add(type);
 			const url = getModelValue(reference, 'url');
 			let actualURL = type == 'vcs' && url != null && url.indexOf('http') > 0 ? url.substring(url.indexOf('http')) : url;
 			// https://github.com/eclipse-platform/eclipse.platform.git?path=ant/org.eclipse.ant.core&tag=I20250304-0640&commitId=f928ecce547595cd272cb5ef6b5fabd58223e17d
@@ -462,7 +484,30 @@ ${artifactURL}
 					actualURL = `${gitHubURL.origin}${gitHubURL.pathname.replace(/\.git$/, '')}/tree/${commitId}/${path}`;
 				}
 			}
-			return `<span class="reference-type">${type}</span><span class="reference-punctuation">: </span><span class="reference-url"><a href="${actualURL}">${url}</a></span>`;
+			return `
+<span class="reference-type">${type}</span><span class="reference-punctuation">: </span>
+<span class="reference-url"><a href="${actualURL}">${getFormattedHost(getFormattedQuery(url))}</a></span>`;
+		}
+
+		function getFormattedQuery(value) {
+			try {
+				const url = new URL(value);
+				const searchParams = url.searchParams;
+				if (searchParams.size > 0) {
+					const formattedQuery = searchParams.entries().map(([key, value]) =>
+						`<span class="rqk">${key}</span><span class="rqp">=</span><span class="rqv"">${value}</span>`
+					).toArray().join('<span class="rqp">&amp;</span>');
+					url.search = '';
+					return url + '<span class="rqp">?</span>' + formattedQuery;
+				}
+				return value;
+			} catch (err) {
+				return value;
+			}
+		}
+
+		function getFormattedHost(value) {
+			return value.replace(/\/\/([^\/:@]+)/, '//<span class="rh">$1</span>');
 		}
 
 
@@ -485,7 +530,7 @@ ${description.replace(' - \u200B', '<hr/>')}
 		function getPropertyElements(component) {
 			const properties = getModelValue(component, 'properties');
 			if (properties != null) {
-				return properties.map(property => `<div class="property" style="display:none">
+				return properties.map(property => `<div class="property property-${getClassName(getModelValue(property, 'name'))}" style="display:none">
 <img class="icon" src="property.svg"/>
 ${getPropertyElementDetail(property)}
 </div>`);
@@ -493,8 +538,14 @@ ${getPropertyElementDetail(property)}
 			return [];
 		}
 
+		function getClassName(value) {
+			const result = value.replaceAll('.', '-');
+			return result;
+		}
+
 		function getPropertyElementDetail(property) {
 			const name = getModelValue(property, 'name');
+			componentPropertyNames.add(name);
 			const value = getModelValue(property, 'value');
 			return `<span class="property-name">${name}</span><span class="property-punctuation">=</span><span class="property-value">${value}</span>`;
 		}
@@ -726,12 +777,19 @@ ${getLicenseElementDetail(license)}
 		}
 
 		function doubleClick(element) {
-			const filters = element.parentElement.querySelectorAll('.filter');
+			window.getSelection().empty();
 			const elementFilter = element.tagName.toLowerCase() == 'label' ? document.getElementById(element.getAttribute('for')) : element;
-			for (const otherFilter of filters) {
-				otherFilter.checked = otherFilter == elementFilter;
-			}
+			const enableAll = !elementFilter.checked;
 
+			const type = elementFilter.classList.contains('subfilter') ? '.subfilter' : '.filter';
+			const filters = element.parentElement.querySelectorAll(type);
+			for (const otherFilter of filters) {
+				if (enableAll) {
+					otherFilter.checked = true
+				} else {
+					otherFilter.checked = otherFilter == elementFilter;
+				}
+			}
 			filter();
 		}
 
@@ -753,17 +811,31 @@ ${getLicenseElementDetail(license)}
 		}
 
 		function doFilter() {
-			const filters = document.querySelectorAll('.filter');
+			const filters = document.querySelectorAll('.filter, .subfilter');
 			let show = 'show-all';
 			for (const filter of filters) {
 				const id = filter.id;
-				const checked = filter.checked;
+				const checked = filter.checked && !filter.disabled;
 				if (id.startsWith('show-')) {
 					if (checked) {
 						show = id;
 					}
 					continue;
 				}
+
+				if (id == 'property' || id == 'reference') {
+					const subfilterElements = filter.parentElement.querySelectorAll(`#${id}-filters`);
+					const subfilterElementsx = filter.parentElement.querySelectorAll(`#${id}-filters *`);
+					for (const element of subfilterElementsx) {
+						if (element.localName == 'label') {
+							element.style.opacity = checked ? '100%' : '50%';
+						} else {
+							element.disabled = !checked;
+						}
+					}
+					continue;
+				}
+
 				const elements = document.querySelectorAll('.' + id);
 				for (const element of elements) {
 					setFiltered(element, !checked);
@@ -824,9 +896,10 @@ ${getLicenseElementDetail(license)}
 			incomingDependencyMap.clear();
 			outgoingDependencyMap.clear();
 			bomProperties.clear();
+			componentExternalReferenceTypes.clear();
+			componentPropertyNames.clear();
 
 			const target = document.getElementById('target');
-
 			const fieldset = document.getElementById('filters');
 
 			document.getElementById('expand-all-section')?.remove();
@@ -988,7 +1061,6 @@ ${componentElements.join('\n')}
 <a class="scrollup" onclick="scrollToTop()">Back to the top</a>
 `;
 
-			doFilter();
 
 			const summary = document.getElementById('summary');
 			const properties = bomProperties.entries().map(([key, value]) =>
@@ -997,7 +1069,27 @@ ${componentElements.join('\n')}
 			summary.innerHTML += properties.join('<span  class="bom-property-punctuation">,</span>\n');
 			summary.style.display = 'block';
 
+			generatNestedFilters(componentPropertyNames, 'property');
+			generatNestedFilters(componentExternalReferenceTypes, 'reference');
+
+			doFilter();
+
 			form.parentElement.style.display = 'none';
+		}
+
+		function generatNestedFilters(keys, type) {
+			const fieldset = document.getElementById(`${type}-filters`)
+			fieldset.innerHTML =
+				[...keys].sort().map(name => `
+<input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filter()" ondblclick="doubleClick(this)" checked />
+<label for="${type}-${getClassName(name)}">${name}</label>
+` ).join('\n');
+
+			const labels = fieldset.querySelectorAll('label');
+			for (const label of labels) {
+				const element = document.getElementById(label.getAttribute('for'));
+				label.ondblclick = element.ondblclick;
+			}
 		}
 
 		function scrollToTop() {
@@ -1134,18 +1226,20 @@ ${componentElements.join('\n')}
 
 					<br />
 
-					<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="property"><img src="property.svg" /> Properties</label>
+					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="detail"><img src="detail.svg" /> Detail</label>
 
 					<br />
+
+					<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="property"><img src="property.svg" /> Properties</label>
+					<fieldset class="nested-filters" id="property-filters">
+					</fieldset>
 
 					<input class="filter" type="checkbox" id="reference" name="reference" onclick="filter()" ondblclick="doubleClick(this)" checked />
 					<label for="reference"><img src="reference.svg" /> External References</label>
-
-					<br />
-
-					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="detail"><img src="detail.svg" /> Detail</label>
+					<fieldset class="nested-filters" id="reference-filters">
+					</fieldset>
 
 				</div>
 
