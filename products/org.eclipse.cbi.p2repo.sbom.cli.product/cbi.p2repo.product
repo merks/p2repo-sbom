@@ -17,6 +17,7 @@
       <programArgs>-nosplash --launcher.suppressErrors --launcher.appendVmargs
       </programArgs>
       <vmArgs>-Dosgi.requiredJavaVersion=17
+-Dorg.eclipse.ecf.provider.filetransfer.excludeContributors=org.eclipse.ecf.provider.filetransfer.httpclientjava
       </vmArgs>
       <vmArgsMac>-XstartOnFirstThread -Dorg.eclipse.swt.internal.carbon.smallFonts
       </vmArgsMac>
