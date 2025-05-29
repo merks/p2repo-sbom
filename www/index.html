@@ -427,29 +427,12 @@
 		function getPurlElement(component) {
 			const purl = getModelValue(component, 'purl');
 			if (purl != null) {
-				const match = purlPattern.exec(purl);
-				if (match != null) {
-					const scheme = match.groups['scheme'];
-					const group = match.groups['group'];
-					const name = match.groups['name'];
-					const version = match.groups['version'];
-					const query = match.groups['query'];
-					const searchParams = new URLSearchParams(query == null ? '' : query);
-					const params = [];
-					params.push(...searchParams.entries().map(([key, value]) =>
-						`<span class="purl-key">${key}</span><span class="purl-punctuation">=</span><span class="purl-value">${linkify(value)}</span>`));
-
-					const artifactURL = getArtifactURL(scheme, group, name, version, searchParams);
-					return [`<div class="purl" style="display:none">
+				const content = getPurlContent(purl);
+				if (content != null) {
+					return [`
+<div class="purl" style="display:none">
 ${getIcon('purl.svg')}
-<span class="purl-scheme">${scheme}</span>
-${group == null ? '' : `<span class="purl-group">${group}</span><span class="purl-punctuation"> / </span>`}
-<span class="purl-name">${name}</span>
-<span class="purl-punctuation"> @ </span>
-<span class="purl-version">${version}</span>
-${params.length > 0 ? '<span class="purl-punctuation"> ? </span>' : ''}
-${params.join('<span class="purl-punctuation"> &amp; </span>\n')}
-${artifactURL}
+${content}
  </div>`];
 				} else {
 					console.log(purl);
@@ -458,13 +441,42 @@ ${artifactURL}
 			return [];
 		}
 
+		function getPurlContent(purl) {
+			const match = purlPattern.exec(purl);
+			if (match != null) {
+				const scheme = match.groups['scheme'];
+				const group = match.groups['group'];
+				const name = match.groups['name'];
+				const version = match.groups['version'];
+				const query = match.groups['query'];
+				const searchParams = new URLSearchParams(query == null ? '' : query);
+				const params = [];
+				params.push(...searchParams.entries().map(([key, value]) =>
+					`<span class="purl-key">${key}</span><span class="purl-punctuation">=</span><span class="purl-value">${linkify(value)}</span>`));
+
+				const artifactURL = getArtifactURL(scheme, group, name, version, searchParams);
+				return `
+<span class="purl-scheme">${scheme}</span>
+${group == null ? '' : `<span class="purl-group">${group}</span><span class="purl-punctuation"> / </span>`}
+<span class="purl-name">${name}</span>
+<span class="purl-punctuation"> @ </span>
+<span class="purl-version">${version}</span>
+${params.length > 0 ? '<span class="purl-punctuation"> ? </span>' : ''}
+${params.join('<span class="purl-punctuation"> &amp; </span>\n')}
+${artifactURL}`;
+			} else {
+				console.log(purl);
+				return null;
+			}
+		}
+
 		function getReferenceElements(component) {
 			const references = getModelValue(component, 'externalReferences', []);
 			if (references != null) {
-				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style="display:none">
-<img class="icon" src="reference.svg"/>
+				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style = "display:none" >
+					<img class="icon" src="reference.svg" />
 ${getReferenceElementDetail(reference)}
-</div>`);
+</div > `);
 			}
 			return [];
 		}
@@ -481,7 +493,7 @@ ${getReferenceElementDetail(reference)}
 				const commitId = gitHubURL.searchParams.get('commitId');
 				const path = gitHubURL.searchParams.get('path');
 				if (path != null && commitId != null) {
-					actualURL = `${gitHubURL.origin}${gitHubURL.pathname.replace(/\.git$/, '')}/tree/${commitId}/${path}`;
+					actualURL = `${gitHubURL.origin}${gitHubURL.pathname.replace(/\.git$/, '')} /tree/${commitId}/${path}`;
 				}
 			}
 			return `
@@ -507,9 +519,8 @@ ${getReferenceElementDetail(reference)}
 		}
 
 		function getFormattedHost(value) {
-			return value.replace(/\/\/([^\/:@]+)/, '//<span class="rh">$1</span>');
+			return value.replace(/\/\/([^\/:]+)/, '//<span class="rh">$1</span>');
 		}
-
 
 		function getDetailElements(component) {
 			const publisher = getModelValue(component, 'publisher');
@@ -547,6 +558,12 @@ ${getPropertyElementDetail(property)}
 			const name = getModelValue(property, 'name');
 			componentPropertyNames.add(name);
 			const value = getModelValue(property, 'value');
+			if (name == 'wrapped-purl') {
+				const content = getPurlContent(value);
+				if (content != null) {
+					return `<span class="property-name">${name}</span><span class="property-punctuation">=</span>${content}`;
+				}
+			}
 			return `<span class="property-name">${name}</span><span class="property-punctuation">=</span><span class="property-value">${value}</span>`;
 		}
 
@@ -644,9 +661,10 @@ ${getLicenseElementDetail(license)}
 				const purl = getModelValue(component, 'purl');
 				if (purl != null) {
 					const searchParams = new URLSearchParams(new URL(purl).searchParams);
-					extClassifier = searchParams.get('classifier');
+					const isMaven = purl.startsWith("pkg:maven/");
+					extClassifier = isMaven ? null : searchParams.get('classifier');
 					const type = searchParams.get('type');
-					if (extClassifier == null && (type == 'jar' || type == null && purl.startsWith("pkg:maven/"))) {
+					if (extClassifier == null && (type == 'jar' || type == null && isMaven)) {
 						extClassifier = 'bundle';
 					}
 				}
