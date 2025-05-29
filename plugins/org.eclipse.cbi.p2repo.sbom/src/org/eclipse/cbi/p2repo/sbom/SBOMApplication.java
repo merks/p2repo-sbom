@@ -518,15 +518,21 @@ public class SBOMApplication implements IApplication {
 				String value = property.getValue();
 				// Filter properties that will be reflected elsewhere in the gathered details,
 				// or are not relevant.
-				if (!key.startsWith("df_LT") && !key.startsWith("maven-") && !IInstallableUnit.PROP_NAME.equals(key)
-						&& !"org.eclipse.justj.model".equals(key) && !"org.eclipse.update.feature.plugin".equals(key)
+				if (!key.startsWith("df_LT") //
+						&& !key.startsWith("maven-") //
+						&& !IInstallableUnit.PROP_NAME.equals(key) //
+						&& !"org.eclipse.justj.model".equals(key) //
+						&& !"org.eclipse.update.feature.plugin".equals(key) //
+						&& !"pgp.trustedPublicKeys".equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_GROUP.equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_FRAGMENT.equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_PRODUCT.equals(key)
 						&& !IInstallableUnit.PROP_BUNDLE_LOCALIZATION.equals(key)
 						&& !IInstallableUnit.PROP_DESCRIPTION.equals(key)
 						&& !IInstallableUnit.PROP_DESCRIPTION_URL.equals(key)
-						&& !IInstallableUnit.PROP_PROVIDER.equals(key) && !IInstallableUnit.PROP_DOC_URL.equals(key)
+						&& !IInstallableUnit.PROP_CONTACT.equals(key) //
+						&& !IInstallableUnit.PROP_PROVIDER.equals(key)//
+						&& !IInstallableUnit.PROP_DOC_URL.equals(key) //
 						&& !value.startsWith("%")) {
 					component.addProperty(createProperty(key, value));
 				}
