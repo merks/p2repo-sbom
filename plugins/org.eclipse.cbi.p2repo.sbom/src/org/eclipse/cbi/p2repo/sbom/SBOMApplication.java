@@ -101,11 +101,13 @@ import org.eclipse.core.runtime.Status;
 import org.eclipse.equinox.app.IApplication;
 import org.eclipse.equinox.app.IApplicationContext;
 import org.eclipse.equinox.internal.p2.artifact.repository.simple.SimpleArtifactRepository;
+import org.eclipse.equinox.internal.p2.metadata.IRequiredCapability;
 import org.eclipse.equinox.p2.core.ProvisionException;
 import org.eclipse.equinox.p2.internal.repository.tools.AbstractApplication;
 import org.eclipse.equinox.p2.internal.repository.tools.RepositoryDescriptor;
 import org.eclipse.equinox.p2.metadata.IArtifactKey;
 import org.eclipse.equinox.p2.metadata.IInstallableUnit;
+import org.eclipse.equinox.p2.metadata.IRequirement;
 import org.eclipse.equinox.p2.metadata.MetadataFactory;
 import org.eclipse.equinox.p2.metadata.MetadataFactory.InstallableUnitDescription;
 import org.eclipse.equinox.p2.publisher.actions.JREAction;
@@ -116,6 +118,7 @@ import org.eclipse.equinox.p2.repository.artifact.IArtifactRepositoryManager;
 import org.eclipse.equinox.p2.repository.artifact.spi.ArtifactDescriptor;
 import org.eclipse.equinox.p2.repository.metadata.IMetadataRepository;
 import org.eclipse.equinox.p2.repository.metadata.IMetadataRepositoryManager;
+import org.eclipse.equinox.spi.p2.publisher.PublisherHelper;
 import org.eclipse.osgi.util.ManifestElement;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
@@ -938,12 +941,26 @@ public class SBOMApplication implements IApplication {
 			}
 		}
 
+		private boolean isExcluded(IRequirement requirement) {
+			if (requirement instanceof IRequiredCapability requiredCapability) {
+				var namespace = requiredCapability.getNamespace();
+				if (PublisherHelper.NAMESPACE_ECLIPSE_TYPE.equals(namespace)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
 		private void resolveDependencies(Dependency dependency, IInstallableUnit iu) {
 			var metadataRepositoryManager = getMetadataRepositoryManager();
 			var component = iuComponents.get(iu);
 			String componentBomRef = component.getBomRef();
 
 			for (var requirement : iu.getRequirements()) {
+				if (isExcluded(requirement)) {
+					continue;
+				}
+
 				var matches = requirement.getMatches();
 				var requiredIUs = metadataRepositoryManager.query(QueryUtil.createMatchQuery(matches), null).toSet();
 				if (requiredIUs.isEmpty()) {
