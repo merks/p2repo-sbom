@@ -50,6 +50,13 @@
 			margin-top: -8px;
 		}
 
+		.count {
+			color: darkcyan;
+			margin-left: .3em;
+			font-weight: bold;
+			font-size: 85%;
+		}
+
 		hr {
 			background-color: #eee;
 			border: none;
@@ -826,6 +833,13 @@ ${getLicenseElementDetail(license)}
 			}
 		}
 
+		function setCount(filter, value) {
+			const count = filter.nextElementSibling.querySelector('.count');
+			if (count != null) {
+				count.textContent = value.toLocaleString();
+			}
+		}
+
 		function filter() {
 			setBusy(true);
 			window.setTimeout(() => {
@@ -836,7 +850,9 @@ ${getLicenseElementDetail(license)}
 		}
 
 		function doFilter() {
-			const filters = document.querySelectorAll('.filter, .subfilter');
+			const filtersFieldset = document.getElementById('filters');
+			const filters = filtersFieldset.querySelectorAll('.filter, .subfilter');
+			const totals = new Map();
 			let show = 'show-all';
 			for (const filter of filters) {
 				const id = filter.id;
@@ -861,18 +877,27 @@ ${getLicenseElementDetail(license)}
 					continue;
 				}
 
+				let count = 0;
 				const elements = document.querySelectorAll('.' + id);
 				for (const element of elements) {
 					setFiltered(element, !checked);
 					if (isShowing(element)) {
 						element.style.display = checked ? 'block' : 'none';
 					}
+					const artifactDiv = element.parentElement?.parentElement?.parentElement;
+					if (artifactDiv != null && !isFiltered(artifactDiv)) {
+						++count;
+					}
 				}
+				totals.set(id, count);
+				setCount(filter, count);
 			}
 
 			const search = document.getElementById('search');
 			const pattern = search.value;
 
+			let visibleWithChildren = 0;
+			let visibleWithoutChildren = 0;
 			const toggles = document.querySelectorAll('.toggle');
 			for (const toggle of toggles) {
 				const parent = toggle.parentElement;
@@ -886,10 +911,32 @@ ${getLicenseElementDetail(license)}
 
 					const hidden = !searchMatch || (show == 'show-with-children' && opacity == 0 || show == 'show-without-children' && opacity == 1);
 					if (!isFiltered(parent)) {
+						if (searchMatch) {
+							if (visibleChildren.length == 0) {
+								++visibleWithoutChildren;
+							} else {
+								++visibleWithChildren;
+							}
+						}
 						setFiltered(parent, !hidden);
 						parent.style.display = hidden ? 'none' : 'block';
 					}
 				}
+			}
+
+			for (const [id, value] of new Map(Object.entries({'show-all': visibleWithChildren + visibleWithoutChildren, 'show-with-children': visibleWithChildren, 'show-without-children': visibleWithoutChildren}))) {
+				setCount(document.getElementById(id), value);
+			}
+
+			const totalElements = document.querySelectorAll('span[data-total');
+			for (const totalElement of totalElements) {
+				const ids = totalElement.getAttribute('data-total').split(' ');
+				let count = 0;
+				for (const id of ids) {
+					count += totals.get(id);
+				}
+				totalElement.textContent = count.toLocaleString();
+				totalElement.parentElement.style.display = 'inline-block';
 			}
 		}
 
@@ -1107,7 +1154,7 @@ ${componentElements.join('\n')}
 			fieldset.innerHTML =
 				[...keys].sort().map(name => `
 <input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filter()" ondblclick="doubleClick(this)" checked />
-<label for="${type}-${getClassName(name)}">${name}</label>
+<label for="${type}-${getClassName(name)}">${name}<span class="count"></span></label>
 ` ).join('\n');
 
 			const labels = fieldset.querySelectorAll('label');
@@ -1193,16 +1240,18 @@ ${componentElements.join('\n')}
 		<fieldset id="filters">
 			<div>
 				<input class="filter" type="checkbox" id="binary" name="binary" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="binary"><img src="binary.svg" /> Binary</label>
+				<label for="binary"><img src="binary.svg" /> Binary<span class="count"></span></span></label>
 
 				<input class="filter" type="checkbox" id="bundle" name="bundle" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="bundle"><img src="bundle.svg" /> Bundle</label>
+				<label for="bundle"><img src="bundle.svg" /> Bundle<span class="count"></span></label>
 
 				<input class="filter" type="checkbox" id="feature" name="feature" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="feature"><img src="feature.svg" /> Feature</label>
+				<label for="feature"><img src="feature.svg" /> Feature<span class="count"></span></label>
 
 				<input class="filter" type="checkbox" id="metadata" name="metadata" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="metadata"><img src="metadata.svg" /> Metadata</label>
+				<label for="metadata"><img src="metadata.svg" /> Metadata<span class="count"></span></label>
+
+				<span style="display: none">&nbsp;&nbsp;&Sigma;<span class="count" data-total='binary bundle feature metadata'></span></span>
 			</div>
 
 			<br />
@@ -1215,13 +1264,13 @@ ${componentElements.join('\n')}
 
 			<div>
 				<input class="filter" type="radio" id="show-all" name="show" onclick="filter()" checked />
-				<label for="show-all">All</label>
+				<label for="show-all">All<span class="count"></span></label>
 
 				<input class="filter" type="radio" id="show-with-children" name="show" onclick="filter()" />
-				<label for="show-with-children">With Children</label>
+				<label for="show-with-children">With Children<span class="count"></span></label>
 
 				<input class="filter" type="radio" id="show-without-children" name="show" onclick="filter()" />
-				<label for="show-without-children">Without Children</label>
+				<label for="show-without-children">Without Children<span class="count"></span></label>
 				<br />
 
 				<hr />
