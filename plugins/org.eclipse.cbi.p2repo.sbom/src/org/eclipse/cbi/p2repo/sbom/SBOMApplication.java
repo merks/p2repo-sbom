@@ -373,6 +373,7 @@ public class SBOMApplication implements IApplication {
 		private void buildArtifactMappings() {
 			var metadataRepositoryManager = getMetadataRepositoryManager();
 			var artifactRepository = getCompositeArtifactRepository();
+			var metadataArtifacts = new HashSet<IInstallableUnit>();
 			for (var iu : metadataRepositoryManager.query(QueryUtil.ALL_UNITS, null).toSet()) {
 				if ("true".equals(iu.getProperty(QueryUtil.PROP_TYPE_CATEGORY)) || //
 						A_JRE_JAVASE_ID.equals(iu.getId())) {
@@ -381,7 +382,7 @@ public class SBOMApplication implements IApplication {
 
 				var artifactKeys = iu.getArtifacts();
 				if (artifactKeys.isEmpty()) {
-					associate(iu, createMetadataArtifactDecriptor(iu));
+					metadataArtifacts.add(iu);
 				} else {
 					for (var artifactKey : artifactKeys) {
 						for (var artifactDescriptor : artifactRepository.getArtifactDescriptors(artifactKey)) {
@@ -413,6 +414,14 @@ public class SBOMApplication implements IApplication {
 						}
 					}
 				}
+			}
+
+			metadataArtifacts.removeAll(featuresToFeatureJars.keySet());
+			for (var iu : metadataArtifacts) {
+				if (iu.getId().endsWith(".feature.group")) {
+					System.err.println("###");
+				}
+				associate(iu, createMetadataArtifactDecriptor(iu));
 			}
 		}
 
