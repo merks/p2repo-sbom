@@ -29,6 +29,12 @@
 			margin-bottom: -0.2em;
 		}
 
+		fieldset fieldset {
+			margin-top: 0.2em;
+			margin-bottom: 0.2em;
+			border: 1px solid lightgray;
+		}
+
 		.input-section {
 			margin: 1em 0em;
 		}
@@ -47,8 +53,9 @@
 		hr {
 			background-color: #eee;
 			border: none;
-			color: darkgray;
-			height: 2px;
+			background-color: darkgray;
+			color: black;
+			height: 1px;
 		}
 
 		.toggle {
@@ -998,7 +1005,7 @@ ${getLicenseElementDetail(license)}
 		}
 
 		async function setInputURL(url) {
-			fetch(url).then(response => {
+			fetch(url, {cache: "no-cache"}).then(response => {
 				try {
 					return response.text();
 				} catch (err) {
