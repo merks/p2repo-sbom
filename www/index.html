@@ -111,6 +111,12 @@
 			font-weight: bold;
 		}
 
+		.repository {
+			display: block;
+			color: firebrick;
+			padding: .2em 0em;
+		}
+
 		.label-version {
 			color: darkred;
 			font-size: 80%;
@@ -313,6 +319,8 @@
 		const bomProperties = new Map();
 		const componentExternalReferenceTypes = new Set();
 		const componentPropertyNames = new Set();
+		const p2Repositories = new Set();
+		const mavenRepositories = new Set();
 
 		function toElements(text) {
 			const wrapper = document.createElement('div');
@@ -414,6 +422,7 @@
 			if (scheme == 'maven') {
 				const repositoryURL = params.get('repository_url');
 				let url = repositoryURL == null ? 'https://repo.maven.apache.org/maven2' : repositoryURL;
+				mavenRepositories.add(url);
 				url += '/' + group.replaceAll('.', '/') + '/' + name + '/' + version + '/' + name + '-' + version;
 				const classifier = params.get('classifier')
 				if (classifier != null) {
@@ -424,6 +433,7 @@
 				return `<a href="${url}"><img src="download.svg"/></a>`;
 			} else if (scheme == 'p2') {
 				let url = params.get('location');
+				p2Repositories.add(url);
 				const classifier = params.get('classifier')
 				if (classifier == 'osgi.bundle') {
 					url += '/plugins/' + name + '_' + version + '.jar';
@@ -970,6 +980,8 @@ ${getLicenseElementDetail(license)}
 			bomProperties.clear();
 			componentExternalReferenceTypes.clear();
 			componentPropertyNames.clear();
+			p2Repositories.clear();
+			mavenRepositories.clear();
 
 			const target = document.getElementById('target');
 			const fieldset = document.getElementById('filters');
@@ -1138,8 +1150,16 @@ ${componentElements.join('\n')}
 			const properties = bomProperties.entries().map(([key, value]) =>
 				`<span class="bom-property-key">${key}</span><span class="bom-property-punctuation">:</span> <span class="bom-property-value">${value}</span>`
 			).toArray();
-			summary.innerHTML += properties.join('<span  class="bom-property-punctuation">,</span>\n');
+
+			summary.innerHTML += properties.join('<span class="bom-property-punctuation">,</span> ') + `
+<hr/>
+<div>
+	${generateRepositories(p2Repositories, 'p2')}
+	${generateRepositories(mavenRepositories, 'maven')}
+</div>
+`;
 			summary.style.display = 'block';
+
 
 			generatNestedFilters(componentPropertyNames, 'property');
 			generatNestedFilters(componentExternalReferenceTypes, 'reference');
@@ -1149,6 +1169,10 @@ ${componentElements.join('\n')}
 			form.parentElement.style.display = 'none';
 		}
 
+		function generateRepositories(repositories, type) {
+			return [...repositories].sort().map(url => `<span class="repository"><span class="purl-scheme">${type}</span> <a class="plain" href="${url}">${getFormattedHost(url)}</a></span>`).join('\n');
+		}
+
 		function generatNestedFilters(keys, type) {
 			const fieldset = document.getElementById(`${type}-filters`)
 			fieldset.innerHTML =
@@ -1156,6 +1180,9 @@ ${componentElements.join('\n')}
 <input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filter()" ondblclick="doubleClick(this)" checked />
 <label for="${type}-${getClassName(name)}">${name}<span class="count"></span></label>
 ` ).join('\n');
+
+			const total = document.querySelector(`label[for=${type}] span[data-total]`);
+			total.setAttribute('data-total', [...keys].map(key => `${type}-${key}`).join(' '));
 
 			const labels = fieldset.querySelectorAll('label');
 			for (const label of labels) {
@@ -1278,40 +1305,40 @@ ${componentElements.join('\n')}
 				<div>
 
 					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies</label>
+					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies<span class="count"></span></label>
 
 					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies</label>
+					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
 
 					<br />
 
 					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="purl"><img src="purl.svg" /> PURLs</label>
+					<label for="purl"><img src="purl.svg" /> PURLs<span class="count"></span></label>
 
 					<br />
 
 					<input class="filter" type="checkbox" id="hash" name="hash" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="hash"><img src="hash.svg" /> Hash Sums</label>
+					<label for="hash"><img src="hash.svg" /> Hash Sums<span class="count"></span></label>
 
 					<br />
 
 					<input class="filter" type="checkbox" id="license" name="license" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="license"><img src="license.svg" /> Licenses</label>
+					<label for="license"><img src="license.svg" /> Licenses<span class="count"></span></label>
 
 					<br />
 
 					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="detail"><img src="detail.svg" /> Detail</label>
+					<label for="detail"><img src="detail.svg" /> Details<span class="count"></span></label>
 
 					<br />
 
 					<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="property"><img src="property.svg" /> Properties</label>
+					<label for="property"><img src="property.svg" /> Properties<span class="count" data-total='*'></span></label>
 					<fieldset class="nested-filters" id="property-filters">
 					</fieldset>
 
 					<input class="filter" type="checkbox" id="reference" name="reference" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="reference"><img src="reference.svg" /> External References</label>
+					<label for="reference"><img src="reference.svg" /> External References<span class="count" data-total='*'></span></label>
 					<fieldset class="nested-filters" id="reference-filters">
 					</fieldset>
 
