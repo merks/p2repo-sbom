@@ -65,6 +65,13 @@
 			height: 1px;
 		}
 
+		.action {
+			color: #f7941e;
+			background-color: white;
+			font-weight: bolder;
+			cursor: pointer;
+		}
+
 		.toggle {
 			color: #f7941e;
 			background-color: white;
@@ -305,6 +312,7 @@
 	<script>
 		//<![CDATA[
 
+		const reset = '\u27F2';
 		const collapsed = '\u25B7';
 		const expanded = '\u25E2';
 		// &#x25B7;
@@ -321,6 +329,23 @@
 		const componentPropertyNames = new Set();
 		const p2Repositories = new Set();
 		const mavenRepositories = new Set();
+
+		function clear() {
+			componentMap.clear();
+			incomingDependencyMap.clear();
+			outgoingDependencyMap.clear();
+			bomProperties.clear();
+			componentExternalReferenceTypes.clear();
+			componentPropertyNames.clear();
+			p2Repositories.clear();
+			mavenRepositories.clear();
+		}
+
+		function restore() {
+			const filters = document.getElementById('filters-form');
+			filters.reset();
+			filter();
+		}
 
 		function toElements(text) {
 			const wrapper = document.createElement('div');
@@ -797,7 +822,14 @@ ${getLicenseElementDetail(license)}
 		function onload() {
 			changeInputType();
 
-			addEventListener(document.getElementById('form'));
+			const form = document.getElementById('form');
+			addEventListener(form);
+
+			const filters = document.getElementById('filters-form');
+			filters.reset();
+			filters.addEventListener('submit', event => {
+				event.preventDefault();
+			});
 
 			const labels = document.querySelectorAll('#filters label');
 			for (const label of labels) {
@@ -974,14 +1006,7 @@ ${getLicenseElementDetail(license)}
 		};
 
 		function generateContent(file) {
-			componentMap.clear();
-			incomingDependencyMap.clear();
-			outgoingDependencyMap.clear();
-			bomProperties.clear();
-			componentExternalReferenceTypes.clear();
-			componentPropertyNames.clear();
-			p2Repositories.clear();
-			mavenRepositories.clear();
+			clear();
 
 			const target = document.getElementById('target');
 			const fieldset = document.getElementById('filters');
@@ -993,6 +1018,7 @@ ${getLicenseElementDetail(license)}
 	<hr>
 	</div>
 	<hr>
+	<span class="action" onclick="restore()" title="Reset Filters">${reset}</span>
 	${generateButton('all')}<span> Expand All</span>
 	<div id="busy-indicator" style="display: none">
 		<div class="loader"></div>
@@ -1160,7 +1186,6 @@ ${componentElements.join('\n')}
 `;
 			summary.style.display = 'block';
 
-
 			generatNestedFilters(componentPropertyNames, 'property');
 			generatNestedFilters(componentExternalReferenceTypes, 'reference');
 
@@ -1265,94 +1290,86 @@ ${componentElements.join('\n')}
 		-->
 
 		<fieldset id="filters">
-			<div>
-				<input class="filter" type="checkbox" id="binary" name="binary" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="binary"><img src="binary.svg" /> Binary<span class="count"></span></span></label>
+			<form id="filters-form">
+				<div>
+					<input class="filter" type="checkbox" id="binary" name="binary" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="binary"><img src="binary.svg" /> Binary<span class="count"></span></span></label>
 
-				<input class="filter" type="checkbox" id="bundle" name="bundle" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="bundle"><img src="bundle.svg" /> Bundle<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="bundle" name="bundle" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="bundle"><img src="bundle.svg" /> Bundle<span class="count"></span></label>
 
-				<input class="filter" type="checkbox" id="feature" name="feature" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="feature"><img src="feature.svg" /> Feature<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="feature" name="feature" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="feature"><img src="feature.svg" /> Feature<span class="count"></span></label>
 
-				<input class="filter" type="checkbox" id="metadata" name="metadata" onclick="filter()" ondblclick="doubleClick(this)" checked />
-				<label for="metadata"><img src="metadata.svg" /> Metadata<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="metadata" name="metadata" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="metadata"><img src="metadata.svg" /> Metadata<span class="count"></span></label>
 
-				<span style="display: none">&nbsp;&nbsp;&Sigma;<span class="count" data-total='binary bundle feature metadata'></span></span>
-			</div>
+					<span style="display: none">&nbsp;&nbsp;&Sigma;<span class="count" data-total='binary bundle feature metadata'></span></span>
+				</div>
 
-			<br />
-
-			<div>
-				<img src="filter.svg" /> <input class="xsearch" type="search" placeholder=".*" id="search" name="xshow" xonclick="filter()" size="50" />
-			</div>
-
-			<br />
-
-			<div>
-				<input class="filter" type="radio" id="show-all" name="show" onclick="filter()" checked />
-				<label for="show-all">All<span class="count"></span></label>
-
-				<input class="filter" type="radio" id="show-with-children" name="show" onclick="filter()" />
-				<label for="show-with-children">With Children<span class="count"></span></label>
-
-				<input class="filter" type="radio" id="show-without-children" name="show" onclick="filter()" />
-				<label for="show-without-children">Without Children<span class="count"></span></label>
 				<br />
 
-				<hr />
+				<div>
+					<img src="filter.svg" /> <input class="xsearch" type="search" placeholder=".*" id="search" name="xshow" xonclick="filter()" size="50" />
+				</div>
+
+				<br />
 
 				<div>
+					<input class="filter" type="radio" id="show-all" name="show" onclick="filter()" checked />
+					<label for="show-all">All<span class="count"></span></label>
 
-					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies<span class="count"></span></label>
+					<input class="filter" type="radio" id="show-with-children" name="show" onclick="filter()" />
+					<label for="show-with-children">With Children<span class="count"></span></label>
 
-					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
-
+					<input class="filter" type="radio" id="show-without-children" name="show" onclick="filter()" />
+					<label for="show-without-children">Without Children<span class="count"></span></label>
 					<br />
 
-					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="purl"><img src="purl.svg" /> PURLs<span class="count"></span></label>
-
-					<br />
-
-					<input class="filter" type="checkbox" id="hash" name="hash" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="hash"><img src="hash.svg" /> Hash Sums<span class="count"></span></label>
-
-					<br />
-
-					<input class="filter" type="checkbox" id="license" name="license" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="license"><img src="license.svg" /> Licenses<span class="count"></span></label>
-
-					<br />
-
-					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="detail"><img src="detail.svg" /> Details<span class="count"></span></label>
-
-					<br />
-
-					<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="property"><img src="property.svg" /> Properties<span class="count" data-total='*'></span></label>
-					<fieldset class="nested-filters" id="property-filters">
-					</fieldset>
-
-					<input class="filter" type="checkbox" id="reference" name="reference" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="reference"><img src="reference.svg" /> External References<span class="count" data-total='*'></span></label>
-					<fieldset class="nested-filters" id="reference-filters">
-					</fieldset>
-
-				</div>
-
-
-				<!--
-				<div id="busy-indicator" style="display: none">
 					<hr />
-					<div class="loader"></div>
-				</div>
-				-->
 
+					<div>
 
+						<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies<span class="count"></span></label>
+
+						<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
+
+						<br />
+
+						<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="purl"><img src="purl.svg" /> PURLs<span class="count"></span></label>
+
+						<br />
+
+						<input class="filter" type="checkbox" id="hash" name="hash" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="hash"><img src="hash.svg" /> Hash Sums<span class="count"></span></label>
+
+						<br />
+
+						<input class="filter" type="checkbox" id="license" name="license" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="license"><img src="license.svg" /> Licenses<span class="count"></span></label>
+
+						<br />
+
+						<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="detail"><img src="detail.svg" /> Details<span class="count"></span></label>
+
+						<br />
+
+						<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="property"><img src="property.svg" /> Properties<span class="count" data-total='*'></span></label>
+						<fieldset class="nested-filters" id="property-filters">
+						</fieldset>
+
+						<input class="filter" type="checkbox" id="reference" name="reference" onclick="filter()" ondblclick="doubleClick(this)" checked />
+						<label for="reference"><img src="reference.svg" /> External References<span class="count" data-total='*'></span></label>
+						<fieldset class="nested-filters" id="reference-filters">
+						</fieldset>
+
+					</div>
+			</form>
 		</fieldset>
 
 		<pre id="target"></pre>
