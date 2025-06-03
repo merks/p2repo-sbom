@@ -4,9 +4,11 @@ pipeline {
   agent { label 'ubuntu-latest' }
 
    options {
+    timestamps()
+    timeout(time: 30, unit: 'MINUTES')
     buildDiscarder(logRotator(numToKeepStr: '10'))
     disableConcurrentBuilds()
-    skipDefaultCheckout true
+    checkoutToSubdirectory('p2repo-sbom')
   }
 
   tools {
@@ -32,7 +34,7 @@ pipeline {
 
     booleanParam(
       name: 'PROMOTE',
-      defaultValue: false,
+      defaultValue: true,
       description: 'Whether to promote the build to the download server.'
     )
 
@@ -144,13 +146,13 @@ pipeline {
   }
 }
 
-mvn() {
+def void mvn() {
   sh '''
     pwd
     if [[ $PROMOTE == false ]]; then
       promotion_argument='-Dorg.eclipse.justj.p2.manager.args='
       sign_argument=''
-    elif
+    else
       sign_argument='-Peclipse-sign'
     fi
     mvn \
