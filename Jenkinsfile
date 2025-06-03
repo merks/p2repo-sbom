@@ -1,5 +1,7 @@
+def boolean useCredentials = false
+
 pipeline {
-  agent { label 'migration' }
+  agent { label 'ubuntu-latest' }
 
    options {
     buildDiscarder(logRotator(numToKeepStr: '10'))
@@ -13,6 +15,7 @@ pipeline {
   }
 
   environment {
+    CHECKOUT = 'false'
     PUBLISH_LOCATION = 'cbi/updates/p2-sbom'
     GITHUB_REPO = 'eclipse-cbi/p2repo-sbom'
   }
@@ -50,10 +53,29 @@ pipeline {
           env.PROMOTE = params.PROMOTE
           env.BUILD_TYPE = params.BUILD_TYPE
         }
+        
+        if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME == null) {
+          useCredentials = true
+          if (params.PROMOTE) {
+            env.SIGN = true
+          } else {
+            env.SIGN = false
+            env.NOTARIZE = false
+            env.PROMOTE = false
+          }
+        } else {
+          useCredentials = false
+          env.SIGN = false
+          env.NOTARIZE = false
+          env.PROMOTE = false
+        }
       }
     }
 
     stage('Git Checkout') {
+      when {
+        environment name: 'CHECKOUT', value: 'true'
+      }
       steps {
         script {
           def gitVariables = checkout(
@@ -76,29 +98,15 @@ pipeline {
 
     stage('Build Tools and Products') {
       steps {
-        sshagent(['projects-storage.eclipse.org-bot-ssh']) {
-          dir('p2repo-sbom/releng/org.eclipse.cbi.p2repo.sbom.releng.parent') {
-            sh '''
-              pwd
-              if [[ $PROMOTE == false ]]; then
-                promotion_argument='-Dorg.eclipse.justj.p2.manager.args='
-              fi
-              mvn \
-                --no-transfer-progress\
-                $promotion_argument \
-                -Dorg.eclipse.storage.user=genie.cbi \
-                -Dorg.eclipse.justj.p2.manager.build.url=$JOB_URL \
-                -Dorg.eclipse.download.location.relative=$PUBLISH_LOCATION \
-                -Dorg.eclipse.justj.p2.manager.relative= \
-                -Dbuild.type=$BUILD_TYPE \
-                -Dgit.commit=$GIT_COMMIT \
-                -Dbuild.id=$BUILD_NUMBER \
-                -DskipTests=false \
-                -Peclipse-sign \
-                -Ppromote \
-                clean \
-                verify
-              '''
+        script {
+           dir('p2repo-sbom/releng/org.eclipse.cbi.p2repo.sbom.releng.parent') {
+            if (useCredentials) {
+              sshagent(['projects-storage.eclipse.org-bot-ssh']) {
+                mvn()
+              }
+            } else {
+              mvn()
+            }
           }
         }
       }
@@ -135,4 +143,31 @@ pipeline {
       deleteDir()
     }
   }
+}
+
+mvn() {
+  sh '''
+    pwd
+    if [[ $PROMOTE == false ]]; then
+      promotion_argument='-Dorg.eclipse.justj.p2.manager.args='
+      sign_argument=''
+    elif
+      sign_argument='-Peclipse-sign'
+    fi
+    mvn \
+      --no-transfer-progress\
+      $promotion_argument \
+      -Dorg.eclipse.storage.user=genie.cbi \
+      -Dorg.eclipse.justj.p2.manager.build.url=$JOB_URL \
+      -Dorg.eclipse.download.location.relative=$PUBLISH_LOCATION \
+      -Dorg.eclipse.justj.p2.manager.relative= \
+      -Dbuild.type=$BUILD_TYPE \
+      -Dgit.commit=$GIT_COMMIT \
+      -Dbuild.id=$BUILD_NUMBER \
+      -DskipTests=false \
+      $sign_argument \
+      -Ppromote \
+      clean \
+      verify
+    '''
 }
