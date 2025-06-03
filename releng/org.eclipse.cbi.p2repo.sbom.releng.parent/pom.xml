@@ -23,7 +23,7 @@ SPDX-License-Identifier: EPL-2.0
 
   <properties>
     <skipTests>false</skipTests>
-    <github.repo>merks/p2repo-sbom</github.repo>
+    <github.repo>eclipse-cbi/p2repo-sbom</github.repo>
     <maven.build.timestamp.format>yyyyMMdd-HHmm</maven.build.timestamp.format>
     <tycho-version>4.0.13</tycho-version>
     <cbi-plugins.version>1.5.2</cbi-plugins.version>

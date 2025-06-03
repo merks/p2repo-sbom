@@ -13,7 +13,7 @@
     </detail>
     <detail
         key="siteURI">
-      <value>https://github.com/merks/p2repo-sbom</value>
+      <value>https://github.com/eclipse-cbi/p2repo-sbom</value>
     </detail>
     <detail
         key="badgeLabel">
@@ -29,7 +29,7 @@
         value="cbi-p2-sbom"/>
     <productVersion
         href="index:/org.eclipse.setup#//@productCatalogs[name='org.eclipse.products']/@products[name='epp.package.committers']/@versions[name='latest']"/>
-    <description>The p2 SBOM Generator installation installs the necessary tools for working with the  &lt;a href=&quot;https://github.com/merks/p2repo-sbom&quot;>eclipse-cbi/p2repo-sbom&lt;/a>'s projects. </description>
+    <description>The p2 SBOM Generator installation installs the necessary tools for working with the  &lt;a href=&quot;https://github.com/eclipse-cbi/p2repo-sbom&quot;>eclipse-cbi/p2repo-sbom&lt;/a>'s projects. </description>
   </installation>
   <workspace
       name="p2.repository.sbom.workspace"
@@ -48,15 +48,15 @@
     </setupTask>
     <stream
         href="index:/org.eclipse.setup#//@projectCatalogs[name='org.eclipse']/@projects[name='cbi']/@projects[name='p2repo-sbom']/@streams[name='main']"/>
-    <description>The p2 SBOM Generator workspace provides access to the &lt;a href=&quot;https://github.com/merks/p2repo-sbom&quot;>eclipse-cbi/p2repo-sbom&lt;/a>'s projects. </description>
+    <description>The p2 SBOM Generator workspace provides access to the &lt;a href=&quot;https://github.com/eclipse-cbi/p2repo-sbom&quot;>eclipse-cbi/p2repo-sbom&lt;/a>'s projects. </description>
   </workspace>
   <description>
     &lt;p>
-    The p2 SBOM Generator configuration provides a specialized development environment for contributing to the  &lt;a href=&quot;https://github.com/merks/p2repo-sbom&quot;>eclipse-cbi/p2repo-sbom&lt;/a> project.
+    The p2 SBOM Generator configuration provides a specialized development environment for contributing to the  &lt;a href=&quot;https://github.com/eclipse-cbi/p2repo-sbom&quot;>eclipse-cbi/p2repo-sbom&lt;/a> project.
     &lt;/p>
     &lt;p>
-    The installation is based the latest committers package and includes the development  tools for working with the &lt;a href=&quot;https://github.com/merks/p2repo-sbom&quot; target=&quot;p2-sbom_git&quot;>eclipse-cbi/p2repo-sbom&lt;/a> projects.
-    The workspace includes the  projects from the &lt;a href=&quot;https://github.com/merks/p2repo-sbom&quot; target=&quot;p2-sbom_git&quot;>eclipse-cbi/p2repo-sbom&lt;/a>'s clone.
+    The installation is based the latest committers package and includes the development  tools for working with the &lt;a href=&quot;https://github.com/eclipse-cbi/p2repo-sbom&quot; target=&quot;p2-sbom_git&quot;>eclipse-cbi/p2repo-sbom&lt;/a> projects.
+    The workspace includes the  projects from the &lt;a href=&quot;https://github.com/eclipse-cbi/p2repo-sbom&quot; target=&quot;p2-sbom_git&quot;>eclipse-cbi/p2repo-sbom&lt;/a>'s clone.
     &lt;/p>
 
   </description>

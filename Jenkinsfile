@@ -14,7 +14,7 @@ pipeline {
 
   environment {
     PUBLISH_LOCATION = 'cbi/updates/p2-sbom'
-    GITHUB_REPO = 'merks/p2repo-sbom'
+    GITHUB_REPO = 'eclipse-cbi/p2repo-sbom'
   }
 
   parameters {

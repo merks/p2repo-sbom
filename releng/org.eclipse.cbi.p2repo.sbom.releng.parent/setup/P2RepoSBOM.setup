@@ -155,7 +155,7 @@
   <setupTask
       xsi:type="git:GitCloneTask"
       id="git.clone.cbi.p2repo-sbom"
-      remoteURI="merks/p2repo-sbom">
+      remoteURI="eclipse-cbi/p2repo-sbom">
     <annotation
         source="http://www.eclipse.org/oomph/setup/InducedChoices">
       <detail
@@ -320,7 +320,7 @@
     <setupTask
         xsi:type="setup:EclipseIniTask"
         option="-Doomph.redirection.cbi.p2repo.sbom.git"
-        value="=https://raw.githubusercontent.com/merks/p2repo-sbom/main/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepoSBOM.setup->${git.clone.cbi.p2repo-sbom.location|uri}/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepoSBOM.setup"
+        value="=https://raw.githubusercontent.com/eclipse-cbi/p2repo-sbom/main/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepoSBOM.setup->${git.clone.cbi.p2repo-sbom.location|uri}/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepoSBOM.setup"
         vm="true">
       <description>Set an Oomph redirection system property to redirect the logical location of this setup to its physical location in the Git clone.</description>
     </setupTask>

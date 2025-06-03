@@ -12,7 +12,7 @@ The Eclipse Common Build Infrastructure (CBI) combines technologies and best-pra
 
 You can set up a pre-configured IDE for the development of the p2 SBOM Generator projects using the following link.
 
-[![Create Eclipse Development Environment for the p2 SBOM Generator](https://download.eclipse.org/oomph/www/setups/svg/p2_SBOM.svg)](https://www.eclipse.org/setups/installer/?url=https://raw.githubusercontent.com/merks/p2repo-sbom/main/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepositorySBOMConfiguration.setup&show=true "Click to open Eclipse-Installer Auto Launch or drag onto your running installer's title area")
+[![Create Eclipse Development Environment for the p2 SBOM Generator](https://download.eclipse.org/oomph/www/setups/svg/p2_SBOM.svg)](https://www.eclipse.org/setups/installer/?url=https://raw.githubusercontent.com/eclipse-cbi/p2repo-sbom/main/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepositorySBOMConfiguration.setup&show=true "Click to open Eclipse-Installer Auto Launch or drag onto your running installer's title area")
 
 ## Developer resources
 
