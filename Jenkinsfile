@@ -48,12 +48,17 @@ pipeline {
   stages {
     stage('Display Parameters') {
       steps {
-        echo "BUILD_TYPE=${params.BUILD_TYPE}"
-        echo "PROMOTE=${params.PROMOTE}"
-        echo "ARCHIVE=${params.ARCHIVE}"
         script {
+          def description = """
+BUILD_TYPE=${params.BUILD_TYPE}
+BRANCH_NAME=${env.BRANCH_NAME}
+PROMOTE=${params.PROMOTE}
+ARCHIVE=${params.ARCHIVE}
+""".trim()
+          echo description
+          crrentBuild.description = description.replace("\n", "<br/>")
           env.BUILD_TYPE = params.BUILD_TYPE
-          if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME == null) {
+          if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == null) {
             useCredentials = true
             if (params.PROMOTE) {
               env.SIGN = true
@@ -69,30 +74,6 @@ pipeline {
             env.NOTARIZE = false
             env.PROMOTE = false
           }
-        }
-      }
-    }
-
-    stage('Git Checkout') {
-      when {
-        environment name: 'CHECKOUT', value: 'true'
-      }
-      steps {
-        script {
-          def gitVariables = checkout(
-            poll: false,
-            scm: [
-              $class: 'GitSCM',
-              branches: [[name: '*/main']],
-              doGenerateSubmoduleConfigurations: false,
-              extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'p2repo-sbom']],
-              submoduleCfg: [],
-              userRemoteConfigs: [[url: "https://github.com/${GITHUB_REPO}.git"]]
-            ]
-          )
-
-          echo "$gitVariables"
-          env.GIT_COMMIT = gitVariables.GIT_COMMIT
         }
       }
     }
@@ -153,7 +134,7 @@ def void mvn() {
       promotion_argument='-Dorg.eclipse.justj.p2.manager.args='
       sign_argument=''
     else
-      sign_argument='-Peclipse-sign'
+      sign_argument='-Peclipse-sign -Ppromote'
     fi
     mvn \
       --no-transfer-progress\
@@ -167,7 +148,6 @@ def void mvn() {
       -Dbuild.id=$BUILD_NUMBER \
       -DskipTests=false \
       $sign_argument \
-      -Ppromote \
       clean \
       verify
     '''
