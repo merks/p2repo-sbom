@@ -56,7 +56,7 @@ PROMOTE=${params.PROMOTE}
 ARCHIVE=${params.ARCHIVE}
 """.trim()
           echo description
-          crrentBuild.description = description.replace("\n", "<br/>")
+          currentBuild.description = description.replace("\n", "<br/>")
           env.BUILD_TYPE = params.BUILD_TYPE
           if (env.BRANCH_NAME == 'main' || env.BRANCH_NAME == null) {
             useCredentials = true
