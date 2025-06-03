@@ -50,24 +50,23 @@ pipeline {
         echo "PROMOTE=${params.PROMOTE}"
         echo "ARCHIVE=${params.ARCHIVE}"
         script {
-          env.PROMOTE = params.PROMOTE
           env.BUILD_TYPE = params.BUILD_TYPE
-        }
-        
-        if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME == null) {
-          useCredentials = true
-          if (params.PROMOTE) {
-            env.SIGN = true
+          if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME == null) {
+            useCredentials = true
+            if (params.PROMOTE) {
+              env.SIGN = true
+              env.PROMOTE = true
+            } else {
+              env.SIGN = false
+              env.NOTARIZE = false
+              env.PROMOTE = false
+            }
           } else {
+            useCredentials = false
             env.SIGN = false
             env.NOTARIZE = false
             env.PROMOTE = false
           }
-        } else {
-          useCredentials = false
-          env.SIGN = false
-          env.NOTARIZE = false
-          env.PROMOTE = false
         }
       }
     }
