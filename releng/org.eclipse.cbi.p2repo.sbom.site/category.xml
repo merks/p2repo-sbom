@@ -3,13 +3,7 @@
    <feature id="org.eclipse.cbi.p2repo.sbom.feature" version="0.0.0">
       <category name="org.eclipse.cbi.p2Repo.sbom"/>
    </feature>
-   <feature id="org.eclipse.cbi.p2repo.sbom.feature.source" version="0.0.0">
-      <category name="org.eclipse.cbi.p2Repo.sbom.misc"/>
-   </feature>
    <feature id="org.eclipse.cbi.p2repo.sbom.dependencies.feature">
-      <category name="org.eclipse.cbi.p2Repo.sbom.misc"/>
-   </feature>
-   <feature id="org.eclipse.cbi.p2repo.sbom.dependencies.feature.source">
       <category name="org.eclipse.cbi.p2Repo.sbom.misc"/>
    </feature>
    <category-def name="org.eclipse.cbi.p2Repo.sbom" label="Eclipse CBI Repository SBOM">

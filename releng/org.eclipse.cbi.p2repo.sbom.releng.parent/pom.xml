@@ -300,20 +300,6 @@ SPDX-License-Identifier: EPL-2.0
               <goal>plugin-source</goal>
             </goals>
           </execution>
-          <execution>
-            <phase>package</phase>
-            <id>feature-source</id>
-            <goals>
-              <goal>feature-source</goal>
-            </goals>
-            <configuration>
-              <excludes>
-                <feature
-                  id="org.eclipse.equinox.p2.core.feature" />
-                <feature id="org.eclipse.equinox.core.feature" />
-              </excludes>
-            </configuration>
-          </execution>
         </executions>
       </plugin>
 

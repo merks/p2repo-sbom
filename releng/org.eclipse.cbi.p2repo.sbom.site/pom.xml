@@ -29,6 +29,7 @@
           <repositoryName>CBI p2 SBOM</repositoryName>
           <xzCompress>false</xzCompress>
           <includeAllDependencies>false</includeAllDependencies>
+          <includeAllSources>true</includeAllSources>
         </configuration>
       </plugin>
     </plugins>
