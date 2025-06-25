@@ -102,12 +102,16 @@ import org.eclipse.equinox.app.IApplication;
 import org.eclipse.equinox.app.IApplicationContext;
 import org.eclipse.equinox.internal.p2.artifact.repository.simple.SimpleArtifactRepository;
 import org.eclipse.equinox.internal.p2.metadata.IRequiredCapability;
+import org.eclipse.equinox.internal.p2.metadata.repository.io.MetadataWriter;
 import org.eclipse.equinox.p2.core.ProvisionException;
 import org.eclipse.equinox.p2.internal.repository.tools.AbstractApplication;
 import org.eclipse.equinox.p2.internal.repository.tools.RepositoryDescriptor;
 import org.eclipse.equinox.p2.metadata.IArtifactKey;
 import org.eclipse.equinox.p2.metadata.IInstallableUnit;
 import org.eclipse.equinox.p2.metadata.IRequirement;
+import org.eclipse.equinox.p2.metadata.ITouchpointData;
+import org.eclipse.equinox.p2.metadata.ITouchpointInstruction;
+import org.eclipse.equinox.p2.metadata.ITouchpointType;
 import org.eclipse.equinox.p2.metadata.MetadataFactory;
 import org.eclipse.equinox.p2.metadata.MetadataFactory.InstallableUnitDescription;
 import org.eclipse.equinox.p2.publisher.actions.JREAction;
@@ -208,6 +212,8 @@ public class SBOMApplication implements IApplication {
 
 		private static final Pattern GITHUB_SCM_PATTERN = Pattern
 				.compile("(scm:)?(git:)?https?://github\\.com/(?<repo>[^/]+/[^/]+?)(\\.git)?");
+
+		private static final Pattern TOUCHPOINT_FORMATTTING_PATTERN = Pattern.compile("\n( *)");
 
 		private final Set<String> rejectedURLs = new TreeSet<>();
 
@@ -550,6 +556,12 @@ public class SBOMApplication implements IApplication {
 				}
 			}
 
+			var touchpointDetails = getTouchpointDetails(iu);
+			if (touchpointDetails != null) {
+				System.err.println(touchpointDetails);
+				component.addProperty(createProperty("touchpoint", touchpointDetails));
+			}
+
 			return component;
 		}
 
@@ -572,9 +584,14 @@ public class SBOMApplication implements IApplication {
 			var mavenDescriptor = MavenDescriptor.create(artifactDescriptor);
 			if (mavenDescriptor != null) {
 				try {
+
 					// Document xmlContent =
 					// contentHandler.getXMLContent(mavenDescriptor.toPOMURI());
 					byte[] mavenArtifactBytes = contentHandler.getBinaryContent(mavenDescriptor.toArtifactURI());
+
+					// Call this only if the Maven artifact exists.
+					getClearlyDefinedProperty(component, mavenDescriptor);
+
 					String purl = mavenDescriptor.getMavenPURL();
 					if (Arrays.equals(bytes, mavenArtifactBytes)) {
 						component.setPurl(purl);
@@ -599,6 +616,26 @@ public class SBOMApplication implements IApplication {
 			var purl = "pkg:p2/" + artifactKey.getId() + "@" + artifactKey.getVersion() + "?classifier="
 					+ artifactKey.getClassifier() + "&location=" + encodedLocation;
 			component.setPurl(purl);
+		}
+
+		private void getClearlyDefinedProperty(Component component, MavenDescriptor mavenDescriptor) {
+			if (!"sources".equals(mavenDescriptor.classifier())) {
+				URI clearlyDefinedURI = mavenDescriptor.toClearlyDefinedURI();
+				try {
+					var clearlyDefinedContent = contentHandler.getContent(clearlyDefinedURI);
+					try {
+						var clearlyDefinedJSON = new JSONObject(clearlyDefinedContent);
+						var clearlyDefinedDeclaredLicense = clearlyDefinedJSON.getJSONObject("licensed")
+								.getString("declared");
+						component.addProperty(BOMUtil.createProperty("clearly-defined", clearlyDefinedDeclaredLicense));
+					} catch (RuntimeException ex) {
+						System.err.println("###" + clearlyDefinedURI);
+						// ex.printStackTrace();
+					}
+				} catch (IOException ex) {
+					throw new RuntimeException(ex);
+				}
+			}
 		}
 
 		private byte[] getArtifactContent(Component component, IArtifactDescriptor artifactDescriptor) {
@@ -1041,9 +1078,101 @@ public class SBOMApplication implements IApplication {
 			}
 		}
 
+		private static String getTouchpointDetails(IInstallableUnit iu) {
+			var touchpointType = iu.getTouchpointType();
+			if (ITouchpointType.NONE.equals(touchpointType)) {
+				return null;
+			}
+			var touchpointData = new ArrayList<>(iu.getTouchpointData());
+			if (PublisherHelper.TOUCHPOINT_NATIVE.equals(touchpointType) && touchpointData.isEmpty()) {
+				return null;
+			}
+			if (PublisherHelper.TOUCHPOINT_OSGI.equals(touchpointType)) {
+				var filteredTouchpointData = new ArrayList<ITouchpointData>();
+				for (var touchpointDataItem : touchpointData) {
+					var filteredInstructions = new LinkedHashMap<String, ITouchpointInstruction>();
+					var instructions = touchpointDataItem.getInstructions();
+					for (var instruction : instructions.entrySet()) {
+						String key = instruction.getKey();
+						if ("manifest".equals(key) || "zipped".equals(key)) {
+							continue;
+						}
+						filteredInstructions.put(key, instruction.getValue());
+					}
+					if (filteredInstructions.isEmpty()) {
+						continue;
+					}
+
+					filteredTouchpointData.add(MetadataFactory.createTouchpointData(filteredInstructions));
+				}
+
+				if (filteredTouchpointData.isEmpty()) {
+					return null;
+				}
+
+				touchpointData.clear();
+				touchpointData.addAll(filteredTouchpointData);
+			}
+
+			if (touchpointType == null || ITouchpointType.NONE.equals(touchpointType)) {
+				if (touchpointData != null && !touchpointData.isEmpty()) {
+					System.err.println("###");
+				}
+			}
+
+			var out = new ByteArrayOutputStream();
+			new MetadataWriter(out, null) {
+				@Override
+				protected void writeInstallableUnit(IInstallableUnit resolvedIU) {
+					start(INSTALLABLE_UNIT_ELEMENT);
+					writeTouchpointType(touchpointType);
+					writeTouchpointData(touchpointData);
+					end(INSTALLABLE_UNIT_ELEMENT);
+					flush();
+				}
+
+				public void cdata(String data, boolean escape) {
+					var parts = data.split(";");
+					for (var part : parts) {
+						super.cdata(part + ";", escape);
+					}
+				}
+
+				public void attribute(String name, int value) {
+					if (!"size".equals(name)) {
+						super.attribute(name, value);
+					}
+				}
+			}.writeInstallableUnit(iu);
+			return new String(out.toByteArray(), StandardCharsets.UTF_8).replaceAll("<\\?.*?\\?>", "").trim()
+					.replace("\r", "");
+		}
+
 		private void generateJson(Bom bom) {
 			if (json || jsonOutput != null) {
+				var undoables = new ArrayList<Runnable>();
 				try {
+					// The json serialization of a property value collapses whitespace, including
+					// line separators into a single space.
+					for (var component : bom.getComponents()) {
+						var properties = component.getProperties();
+						if (properties != null) {
+							for (var property : properties) {
+								var value = property.getValue();
+								Matcher matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(value);
+								if (matcher.find()) {
+									var jsonValue = new StringBuilder();
+									do {
+										matcher.appendReplacement(jsonValue,
+												"&#x0A;" + matcher.group(1).replaceAll(" ", "&#x20;"));
+									} while (matcher.find());
+									matcher.appendTail(jsonValue);
+									property.setValue(jsonValue.toString());
+									undoables.add(() -> property.setValue(value));
+								}
+							}
+						}
+					}
 					var jsonGenerator = BomGeneratorFactory.createJson(Version.VERSION_16, bom);
 					var jsonString = jsonGenerator.toJsonString();
 					if (json) {
@@ -1055,6 +1184,8 @@ public class SBOMApplication implements IApplication {
 					}
 				} catch (Exception ex) {
 					throw new RuntimeException(ex);
+				} finally {
+					undoables.forEach(Runnable::run);
 				}
 			}
 		}
@@ -1187,6 +1318,11 @@ public class SBOMApplication implements IApplication {
 			return toURI((classifier == null ? "" : '-' + classifier) + "." + type);
 		}
 
+		public URI toClearlyDefinedURI() {
+			return URI.create("https://api.clearlydefined.io/definitions/maven/mavencentral/" + groupId + "/"
+					+ artifactId + "/" + version);
+		}
+
 		public String getMavenPURL() {
 			var qualifiers = new LinkedHashMap<String, String>();
 			if (!"jar".equals(type)) {
@@ -1278,7 +1414,7 @@ public class SBOMApplication implements IApplication {
 
 			try {
 				if (cache != null) {
-					this.cache = Path.of(cache);
+					this.cache = Path.of(cache).toRealPath();
 				} else {
 					this.cache = Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.cache");
 				}

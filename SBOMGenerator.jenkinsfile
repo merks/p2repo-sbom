@@ -6,16 +6,22 @@ pipeline {
     skipDefaultCheckout true
     timeout(time: 20, unit: 'MINUTES')
   }
- 
+
   tools {
     jdk 'temurin-jdk21-latest'
   }
-  
+
   environment {
     MAIL_TO = 'ed.merks@gmail.com'
   }
- 
+
   parameters {
+    booleanParam(
+      name: 'USE_CACHE',
+      defaultValue: true,
+      description: 'Whether to use the network cache <a href="lastSuccessfulBuild/artifact/cache.zip">lastSuccessfulBuild/artifact/cache.zip</a> from the most recent build.'
+    )
+
     text(
       name: 'UPDATE_SITES',
       defaultValue: "https://download.eclipse.org/oomph/products/latest/repository",
@@ -23,39 +29,58 @@ pipeline {
         '''
         Update sites to analyze.
         '''
-      )}""")  }
+      )}""")
+  }
 
 
   stages {
     stage('SBOM Generator') {
       steps {
-          script {
-            env.UPDATE_SITES = params.UPDATE_SITES
-          }
-          sh '''
-            set -o pipefail
+        script {
+          env.USE_CACHE = params.USE_CACHE
+          env.UPDATE_SITES = params.UPDATE_SITES
+          def description = """
+UPDATE_SITES=${env.USE_CACHE}
+UPDATE_SITES:
+${env.UPDATE_SITES}
+""".trim()
+          echo description
+          currentBuild.description = description.replace("\n", "<br/>")
+        }
 
-            curl -O https://download.eclipse.org/cbi/updates/p2-sbom/products/nightly/latest/org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
-            tar --warning=no-unknown-keyword -xf org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+        sh '''
+          set -x
+          set -o pipefail
 
-            cbi-sbom/cbi-sbom \
-              -application org.eclipse.cbi.p2repo.sbom.generator \
-              -consoleLog \
-              -noSplash \
-              -verbose \
-              -input ${UPDATE_SITES} \
-              -xml-output sbom.xml \
-              -json-output sbom.json \
-              -vmargs \
-                -Dfile.encoding=UTF-8 2>&1 | tee log
-          '''
+          if [[ ${USE_CACHE} == 'true' ]]; then
+            curl --fail-with-body -O ${JOB_URL}lastSuccessfulBuild/artifact/cache.zip && unzip cache.zip
+          fi
+
+          curl -O https://download.eclipse.org/cbi/updates/p2-sbom/products/nightly/latest/org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+          tar --warning=no-unknown-keyword -xf org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+
+          cbi-sbom/cbi-sbom \
+            -application org.eclipse.cbi.p2repo.sbom.generator \
+            -consoleLog \
+            -noSplash \
+            -verbose \
+            -input ${UPDATE_SITES} \
+            -xml-output sbom.xml \
+            -json-output sbom.json \
+            -cache cache \
+            -vmargs \
+            -Dfile.encoding=UTF-8 2>&1 | tee log
+
+          rm -f cache.zip
+          zip -r cache.zip cache
+        '''
       }
     }
 
     stage('Archive Results') {
       steps {
-        archiveArtifacts '*.xml,*.json'
-        script { 
+        archiveArtifacts '*.xml,*.json, cache.zip'
+        script {
           def description = """
 <a href="https://download.eclipse.org/cbi/sbom/?file=${env.BUILD_URL}artifact/sbom.xml"><img src="https://download.eclipse.org/cbi/sbom/favicon.ico"/> sbom.xml</a>
 <a href="https://download.eclipse.org/cbi/sbom/?file=${env.BUILD_URL}/artifact/sbom.json"><img src="https://download.eclipse.org/cbi/sbom/favicon.ico"/> sbom.json</a>

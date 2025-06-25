@@ -201,6 +201,12 @@
 			color: darkgreen;
 		}
 
+		.touchpoint {
+			display: block;
+			margin-left: 1em;
+			white-space: pre;
+		}
+
 		.reference-type {
 			font-weight: bold;
 			color: darkblue;
@@ -613,6 +619,16 @@ ${getPropertyElementDetail(property)}
 					return `<span class="property-name">${name}</span><span class="property-punctuation">=</span>${content}`;
 				}
 			}
+			if (name == 'touchpoint') {
+				const escapedValue = value.
+					replaceAll('&#x0A;', '\n').
+					replaceAll(/^<\/?unit>\n?/gm, '').
+					replaceAll('&#x20;', ' ').
+					replaceAll('&', '&amp;').
+					replaceAll('<', '&lt;').
+					replaceAll('>', '&gt;')
+				return `<span class="property-name">${name}</span><span class="property-punctuation">=</span><span class="property-value touchpoint">${escapedValue}</span>`;
+			}
 			return `<span class="property-name">${name}</span><span class="property-punctuation">=</span><span class="property-value">${value}</span>`;
 		}
 
@@ -907,9 +923,8 @@ ${getLicenseElementDetail(license)}
 				}
 
 				if (id == 'property' || id == 'reference') {
-					const subfilterElements = filter.parentElement.querySelectorAll(`#${id}-filters`);
-					const subfilterElementsx = filter.parentElement.querySelectorAll(`#${id}-filters *`);
-					for (const element of subfilterElementsx) {
+					const subfilterElements = filter.parentElement.querySelectorAll(`#${id}-filters *`);
+					for (const element of subfilterElements) {
 						if (element.localName == 'label') {
 							element.style.opacity = checked ? '100%' : '50%';
 						} else {
@@ -1207,7 +1222,7 @@ ${componentElements.join('\n')}
 ` ).join('\n');
 
 			const total = document.querySelector(`label[for=${type}] span[data-total]`);
-			total.setAttribute('data-total', [...keys].map(key => `${type}-${key}`).join(' '));
+			total.setAttribute('data-total', [...keys].map(key => `${type}-${getClassName(key)}`).join(' '));
 
 			const labels = fieldset.querySelectorAll('label');
 			for (const label of labels) {
