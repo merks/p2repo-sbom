@@ -537,11 +537,15 @@ public class SBOMApplication implements IApplication {
 				// Filter properties that will be reflected elsewhere in the gathered details,
 				// or are not relevant.
 				if (!key.startsWith("df_LT") //
+						&& !key.endsWith(".pluginName") //
+						&& !key.endsWith(".provideName") //
 						&& !key.startsWith("maven-") //
+						&& !key.startsWith("iplog.") //
 						&& !IInstallableUnit.PROP_NAME.equals(key) //
 						&& !"org.eclipse.justj.model".equals(key) //
 						&& !"org.eclipse.update.feature.plugin".equals(key) //
-						&& !"pgp.trustedPublicKeys".equals(key)
+						&& !"pgp.trustedPublicKeys".equals(key) //
+						&& !"org.eclipse.update.feature.exclusive".equals(key) //
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_GROUP.equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_FRAGMENT.equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_PRODUCT.equals(key)
@@ -558,7 +562,6 @@ public class SBOMApplication implements IApplication {
 
 			var touchpointDetails = getTouchpointDetails(iu);
 			if (touchpointDetails != null) {
-				System.err.println(touchpointDetails);
 				component.addProperty(createProperty("touchpoint", touchpointDetails));
 			}
 
@@ -582,9 +585,8 @@ public class SBOMApplication implements IApplication {
 		private void setPurl(Component component, IInstallableUnit iu, IArtifactDescriptor artifactDescriptor,
 				byte[] bytes) {
 			var mavenDescriptor = MavenDescriptor.create(artifactDescriptor);
-			if (mavenDescriptor != null) {
+			if (mavenDescriptor != null && !mavenDescriptor.isSnapshot()) {
 				try {
-
 					// Document xmlContent =
 					// contentHandler.getXMLContent(mavenDescriptor.toPOMURI());
 					byte[] mavenArtifactBytes = contentHandler.getBinaryContent(mavenDescriptor.toArtifactURI());
@@ -601,7 +603,7 @@ public class SBOMApplication implements IApplication {
 				} catch (ContentHandler.ContentHandlerException e) {
 					// The only valid reason to fail is a 404,
 					// i.e., resource does not exist on Maven Central.
-					if (e.getResponse().statusCode() != 404) {
+					if (e.statusCode() != 404) {
 						throw new RuntimeException(e);
 					}
 				} catch (IOException e) {
@@ -625,12 +627,15 @@ public class SBOMApplication implements IApplication {
 					var clearlyDefinedContent = contentHandler.getContent(clearlyDefinedURI);
 					try {
 						var clearlyDefinedJSON = new JSONObject(clearlyDefinedContent);
-						var clearlyDefinedDeclaredLicense = clearlyDefinedJSON.getJSONObject("licensed")
-								.getString("declared");
-						component.addProperty(BOMUtil.createProperty("clearly-defined", clearlyDefinedDeclaredLicense));
+						var clearlyDefinedLicensed = clearlyDefinedJSON.getJSONObject("licensed");
+						if (clearlyDefinedLicensed.has("declared")) {
+							var clearlyDefinedDeclaredLicense = clearlyDefinedLicensed.get("declared");
+							if (clearlyDefinedDeclaredLicense instanceof String value) {
+								component.addProperty(BOMUtil.createProperty("clearly-defined", value));
+							}
+						}
 					} catch (RuntimeException ex) {
 						System.err.println("###" + clearlyDefinedURI);
-						// ex.printStackTrace();
 					}
 				} catch (IOException ex) {
 					throw new RuntimeException(ex);
@@ -664,12 +669,12 @@ public class SBOMApplication implements IApplication {
 			}
 
 			var mavenDescriptor = MavenDescriptor.create(artifactDescriptor);
-			if (mavenDescriptor != null) {
+			if (mavenDescriptor != null && !mavenDescriptor.isSnapshot()) {
 				try {
 					var content = contentHandler.getContent(mavenDescriptor.toPOMURI());
 					gatherInformationFromPOM(component, content.getBytes(StandardCharsets.UTF_8), licenseToName);
 				} catch (ContentHandler.ContentHandlerException e) {
-					if (e.getResponse().statusCode() != 404) {
+					if (e.statusCode() != 404) {
 						throw new RuntimeException(e);
 					}
 				} catch (IOException e) {
@@ -1094,6 +1099,9 @@ public class SBOMApplication implements IApplication {
 					var instructions = touchpointDataItem.getInstructions();
 					for (var instruction : instructions.entrySet()) {
 						String key = instruction.getKey();
+						// The 'manifest' is used noise that I've now removed from the p2 publisher.
+						// The 'zipped' is just a boolean to indicate that the artifact should be
+						// unzipped.
 						if ("manifest".equals(key) || "zipped".equals(key)) {
 							continue;
 						}
@@ -1112,12 +1120,6 @@ public class SBOMApplication implements IApplication {
 
 				touchpointData.clear();
 				touchpointData.addAll(filteredTouchpointData);
-			}
-
-			if (touchpointType == null || ITouchpointType.NONE.equals(touchpointType)) {
-				if (touchpointData != null && !touchpointData.isEmpty()) {
-					System.err.println("###");
-				}
 			}
 
 			var out = new ByteArrayOutputStream();
@@ -1310,6 +1312,10 @@ public class SBOMApplication implements IApplication {
 			return null;
 		}
 
+		public boolean isSnapshot() {
+			return version.endsWith("-SNAPSHOT");
+		}
+
 		public URI toPOMURI() {
 			return toURI(".pom");
 		}
@@ -1391,15 +1397,20 @@ public class SBOMApplication implements IApplication {
 		public static class ContentHandlerException extends IOException {
 			private static final long serialVersionUID = 1L;
 
-			private final HttpResponse<?> response;
+			private final int statusCode;
 
 			public ContentHandlerException(HttpResponse<?> response) {
 				super("status code " + response.statusCode() + " -> " + response.uri());
-				this.response = response;
+				this.statusCode = response.statusCode();
 			}
 
-			public HttpResponse<?> getResponse() {
-				return response;
+			public ContentHandlerException(int statusCode, URI uri) {
+				super("status code " + statusCode + " -> " + uri);
+				this.statusCode = statusCode;
+			}
+
+			public int statusCode() {
+				return statusCode;
 			}
 		}
 
@@ -1420,6 +1431,18 @@ public class SBOMApplication implements IApplication {
 				}
 			} catch (IOException e) {
 				throw new RuntimeException(e);
+			}
+		}
+
+		private boolean isCacheExpired(Path path) {
+			try {
+				var lastModifiedTime = Files.getLastModifiedTime(path);
+				var now = System.currentTimeMillis();
+				var age = now - lastModifiedTime.toMillis();
+				var ageInHours = age / 1000 / 60 / 60;
+				return ageInHours > 8;
+			} catch (IOException e) {
+				return true;
 			}
 		}
 
@@ -1445,10 +1468,18 @@ public class SBOMApplication implements IApplication {
 			return response.body();
 		}
 
+		protected Path getCachePath404(URI uri) {
+			return getCachePath(uri, "404/");
+		}
+
 		protected Path getCachePath(URI uri) {
+			return getCachePath(uri, "");
+		}
+
+		private Path getCachePath(URI uri, String prefix) {
 			var decodedURI = URLDecoder.decode(uri.toString(), StandardCharsets.UTF_8);
 			var uriSegments = decodedURI.split("[:/?#&;]+");
-			var result = cache.resolve(String.join("/", uriSegments));
+			var result = cache.resolve(prefix + String.join("/", uriSegments));
 			return result;
 		}
 
@@ -1462,11 +1493,29 @@ public class SBOMApplication implements IApplication {
 
 		public boolean exists(URI uri) {
 			return exists.computeIfAbsent(uri, u -> {
+				var path = getCachePath(uri);
+				if (Files.isRegularFile(path) && !isCacheExpired(path)) {
+					return true;
+				}
+
+				var path404 = getCachePath404(uri);
+				if (Files.isRegularFile(path404) && !isCacheExpired(path404)) {
+					return false;
+				}
+
 				try {
 					basicHead(uri, BodyHandlers.ofString());
+					Files.createDirectories(path.getParent());
+					Files.writeString(path, "");
 					return true;
 				} catch (ContentHandlerException e) {
-					if (e.getResponse().statusCode() == 404) {
+					if (e.statusCode() == 404) {
+						try {
+							Files.createDirectories(path404.getParent());
+							Files.writeString(path404, "");
+						} catch (IOException e1) {
+							throw new RuntimeException(e);
+						}
 						return false;
 					}
 					throw new RuntimeException(e);
@@ -1491,14 +1540,13 @@ public class SBOMApplication implements IApplication {
 			}
 
 			var path = getCachePath(uri);
-			if (Files.isRegularFile(path)) {
-				var lastModifiedTime = Files.getLastModifiedTime(path);
-				var now = System.currentTimeMillis();
-				var age = now - lastModifiedTime.toMillis();
-				var ageInHours = age / 1000 / 60 / 60;
-				if (ageInHours < 8) {
-					return reader.read(path);
-				}
+			if (Files.isRegularFile(path) && !isCacheExpired(path)) {
+				return reader.read(path);
+			}
+
+			var path404 = getCachePath404(uri);
+			if (Files.isRegularFile(path404) && !isCacheExpired(path404)) {
+				throw new ContentHandlerException(404, uri);
 			}
 
 			try {
@@ -1506,6 +1554,12 @@ public class SBOMApplication implements IApplication {
 				Files.createDirectories(path.getParent());
 				writer.write(path, content);
 				return content;
+			} catch (ContentHandlerException e) {
+				if (e.statusCode() == 404) {
+					Files.createDirectories(path404.getParent());
+					Files.writeString(path404, "");
+				}
+				throw e;
 			} catch (InterruptedException e) {
 				throw new IOException(e);
 			}
