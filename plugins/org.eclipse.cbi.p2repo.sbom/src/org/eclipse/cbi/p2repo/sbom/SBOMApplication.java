@@ -538,7 +538,7 @@ public class SBOMApplication implements IApplication {
 				// or are not relevant.
 				if (!key.startsWith("df_LT") //
 						&& !key.endsWith(".pluginName") //
-						&& !key.endsWith(".provideName") //
+						&& !key.endsWith(".providerName") //
 						&& !key.startsWith("maven-") //
 						&& !key.startsWith("iplog.") //
 						&& !IInstallableUnit.PROP_NAME.equals(key) //

@@ -98,6 +98,7 @@ SPDX-License-Identifier: EPL-2.0
                 -type ${build.type}
                 -version-iu org.eclipse.cbi.p2repo.sbom.feature
                 -iu-filter-pattern "org\.eclipse\.cbi\.p2repo\.?.*|org\.eclipse\.cbi\.tycho.*"
+                -excluded-categories-pattern ".*org.eclipse.cbi.p2Repo.sbom.misc"
                 -commit https://github.com/${github.repo}/commit/${git.commit}
                 -breadcrumb "CBI p2 SBOM https://projects.eclipse.org/projects/technology.cbi"
                 -favicon https://raw.githubusercontent.com/eclipse-cbi/p2repo-aggregator/main/favicon.ico
