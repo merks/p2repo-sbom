@@ -900,10 +900,11 @@ ${getLicenseElementDetail(license)}
 
 		function filter() {
 			setBusy(true);
-			window.setTimeout(() => {
-				doFilter();
-				setBusy(false);
-			},
+			window.setTimeout(
+				() => {
+					doFilter();
+					setBusy(false);
+				},
 				100);
 		}
 
@@ -998,6 +999,7 @@ ${getLicenseElementDetail(license)}
 		}
 
 		function setBusy(on) {
+			document.getElementById('formatted-target').style.display = on ? 'none' : 'block';
 			const busyIndicator = document.getElementById('busy-indicator');
 			if (busyIndicator != null) {
 				const display = on ? 'inline-block' : 'none';
