@@ -33,6 +33,7 @@ SPDX-License-Identifier: EPL-2.0
     <tycho.scmUrl>scm:git:https://github.com/${github.repo}</tycho.scmUrl>
     <dirtyWorkingTree>warning</dirtyWorkingTree>
     <comparatorMode>warn</comparatorMode>
+    <baselineReplaceMode>all</baselineReplaceMode>
     <baselineRepository>https://download.eclipse.org/cbi/updates/p2-sbom/tools/nightly/latest</baselineRepository>
   </properties>
 
@@ -209,7 +210,7 @@ SPDX-License-Identifier: EPL-2.0
           <version>${tycho-version}</version>
           <configuration>
             <baselineMode>${comparatorMode}</baselineMode>
-            <baselineReplace>all</baselineReplace>
+            <baselineReplace>${baselineReplaceMode}</baselineReplace>
             <baselineRepositories>
               <repository>
                 <url>${baselineRepository}</url>

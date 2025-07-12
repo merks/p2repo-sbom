@@ -14,4 +14,8 @@
   <artifactId>org.eclipse.cbi.p2repo.sbom.dependencies.feature</artifactId>
   <packaging>eclipse-feature</packaging>
 
+  <properties>
+    <baselineReplaceMode>none</baselineReplaceMode>
+  </properties>
+
 </project>
