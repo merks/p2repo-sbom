@@ -61,7 +61,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
@@ -82,6 +81,7 @@ import javax.xml.xpath.XPathFactory;
 import org.cyclonedx.Version;
 import org.cyclonedx.generators.BomGeneratorFactory;
 import org.cyclonedx.generators.xml.BomXmlGenerator;
+import org.cyclonedx.model.Ancestors;
 import org.cyclonedx.model.Annotation;
 import org.cyclonedx.model.Bom;
 import org.cyclonedx.model.Component;
@@ -92,6 +92,7 @@ import org.cyclonedx.model.ExternalReference;
 import org.cyclonedx.model.Hash;
 import org.cyclonedx.model.License;
 import org.cyclonedx.model.LicenseChoice;
+import org.cyclonedx.model.Pedigree;
 import org.cyclonedx.model.Property;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
@@ -176,6 +177,7 @@ public class SBOMApplication implements IApplication {
 		return null;
 	}
 
+	@Override
 	public void stop() {
 	}
 
@@ -356,8 +358,8 @@ public class SBOMApplication implements IApplication {
 
 			// Transfer gathered details from binary IU to corresponding source IU.
 			for (var entry : iuComponents.entrySet()) {
-				IInstallableUnit iu = entry.getKey();
-				Component component = entry.getValue();
+				var iu = entry.getKey();
+				var component = entry.getValue();
 				transferDetailsFromBinaryToSource(component, iu);
 			}
 
@@ -393,14 +395,13 @@ public class SBOMApplication implements IApplication {
 					for (var artifactKey : artifactKeys) {
 						for (var artifactDescriptor : artifactRepository.getArtifactDescriptors(artifactKey)) {
 							// Only process the canonical descriptor, i.e., not the pack200.
-							String format = artifactDescriptor.getProperty(IArtifactDescriptor.FORMAT);
+							var format = artifactDescriptor.getProperty(IArtifactDescriptor.FORMAT);
 							if (format == null) {
 								associate(iu, artifactDescriptor);
 
 								// Create the two-way map between feature IU and feature jar IU.
 								var id = iu.getId();
-
-								Matcher matcher = FEATURE_JAR_PATTERN.matcher(id);
+								var matcher = FEATURE_JAR_PATTERN.matcher(id);
 								if (matcher.matches()) {
 									var iuQuery = QueryUtil.createIUQuery(matcher.group(1) + ".group", iu.getVersion());
 									var set = metadataRepositoryManager.query(iuQuery, null).toSet();
@@ -499,6 +500,15 @@ public class SBOMApplication implements IApplication {
 			artifactDescriptors.put(artifactKey, artifactDescriptor);
 		}
 
+		private Component createAncestorComponent(MavenDescriptor mavenDescriptor) {
+			var component = new Component();
+			component.setType(Component.Type.LIBRARY);
+			component.setName(mavenDescriptor.artifactId());
+			component.setGroup(mavenDescriptor.groupId());
+			component.setPurl(mavenDescriptor.mavenPURL());
+			return component;
+		}
+
 		private Component createComponent(IInstallableUnit iu) {
 			var component = new Component();
 			component.setName(iu.getId());
@@ -532,8 +542,8 @@ public class SBOMApplication implements IApplication {
 			}
 
 			for (var property : iu.getProperties().entrySet()) {
-				String key = property.getKey();
-				String value = property.getValue();
+				var key = property.getKey();
+				var value = property.getValue();
 				// Filter properties that will be reflected elsewhere in the gathered details,
 				// or are not relevant.
 				if (!key.startsWith("df_LT") //
@@ -589,17 +599,25 @@ public class SBOMApplication implements IApplication {
 				try {
 					// Document xmlContent =
 					// contentHandler.getXMLContent(mavenDescriptor.toPOMURI());
-					byte[] mavenArtifactBytes = contentHandler.getBinaryContent(mavenDescriptor.toArtifactURI());
+					var mavenArtifactBytes = contentHandler.getBinaryContent(mavenDescriptor.toArtifactURI());
 
 					// Call this only if the Maven artifact exists.
 					getClearlyDefinedProperty(component, mavenDescriptor);
 
-					String purl = mavenDescriptor.getMavenPURL();
+					// Only if the artifact is byte-for-byte equal do we generate a PURL reference
+					// to the Maven artifact.
 					if (Arrays.equals(bytes, mavenArtifactBytes)) {
+						var purl = mavenDescriptor.mavenPURL();
 						component.setPurl(purl);
 						return;
 					}
-					component.addProperty(BOMUtil.createProperty("wrapped-purl", purl));
+
+					// Otherwise record this as a pedigree ancestor component.
+					var pedigree = new Pedigree();
+					var ancenstors = new Ancestors();
+					ancenstors.addComponent(createAncestorComponent(mavenDescriptor));
+					pedigree.setAncestors(ancenstors);
+					component.setPedigree(pedigree);
 				} catch (ContentHandler.ContentHandlerException e) {
 					// The only valid reason to fail is a 404,
 					// i.e., resource does not exist on Maven Central.
@@ -622,7 +640,7 @@ public class SBOMApplication implements IApplication {
 
 		private void getClearlyDefinedProperty(Component component, MavenDescriptor mavenDescriptor) {
 			if (!"sources".equals(mavenDescriptor.classifier())) {
-				URI clearlyDefinedURI = mavenDescriptor.toClearlyDefinedURI();
+				var clearlyDefinedURI = mavenDescriptor.toClearlyDefinedURI();
 				try {
 					var clearlyDefinedContent = contentHandler.getContent(clearlyDefinedURI);
 					try {
@@ -781,7 +799,7 @@ public class SBOMApplication implements IApplication {
 										.collect(Collectors.joining("&", "?", ""));
 								addExternalReference(component, ExternalReference.Type.VCS, value + query);
 
-								Matcher matcher = GITHUB_SCM_PATTERN.matcher(value);
+								var matcher = GITHUB_SCM_PATTERN.matcher(value);
 								if (matcher.matches()) {
 									var uri = URI.create("https://github.com/" + matcher.group("repo") + "/issues");
 									if (contentHandler.exists(uri)) {
@@ -1005,7 +1023,7 @@ public class SBOMApplication implements IApplication {
 		private void resolveDependencies(Dependency dependency, IInstallableUnit iu) {
 			var metadataRepositoryManager = getMetadataRepositoryManager();
 			var component = iuComponents.get(iu);
-			String componentBomRef = component.getBomRef();
+			var componentBomRef = component.getBomRef();
 
 			for (var requirement : iu.getRequirements()) {
 				if (isExcluded(requirement)) {
@@ -1098,7 +1116,7 @@ public class SBOMApplication implements IApplication {
 					var filteredInstructions = new LinkedHashMap<String, ITouchpointInstruction>();
 					var instructions = touchpointDataItem.getInstructions();
 					for (var instruction : instructions.entrySet()) {
-						String key = instruction.getKey();
+						var key = instruction.getKey();
 						// The 'manifest' is used noise that I've now removed from the p2 publisher.
 						// The 'zipped' is just a boolean to indicate that the artifact should be
 						// unzipped.
@@ -1133,6 +1151,7 @@ public class SBOMApplication implements IApplication {
 					flush();
 				}
 
+				@Override
 				public void cdata(String data, boolean escape) {
 					var parts = data.split(";");
 					for (var part : parts) {
@@ -1140,6 +1159,7 @@ public class SBOMApplication implements IApplication {
 					}
 				}
 
+				@Override
 				public void attribute(String name, int value) {
 					if (!"size".equals(name)) {
 						super.attribute(name, value);
@@ -1161,7 +1181,7 @@ public class SBOMApplication implements IApplication {
 						if (properties != null) {
 							for (var property : properties) {
 								var value = property.getValue();
-								Matcher matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(value);
+								var matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(value);
 								if (matcher.find()) {
 									var jsonValue = new StringBuilder();
 									do {
@@ -1329,7 +1349,7 @@ public class SBOMApplication implements IApplication {
 					+ artifactId + "/" + version);
 		}
 
-		public String getMavenPURL() {
+		public String mavenPURL() {
 			var qualifiers = new LinkedHashMap<String, String>();
 			if (!"jar".equals(type)) {
 				qualifiers.put("type", type);
@@ -1350,9 +1370,9 @@ public class SBOMApplication implements IApplication {
 
 	public final static class SPDXIndex {
 
-		private final Map<String, String> spdxLicenceIds = new TreeMap<String, String>();
+		private final Map<String, String> spdxLicenceIds = new TreeMap<>();
 
-		private final Map<String, String> spdxLicenceNames = new TreeMap<String, String>();
+		private final Map<String, String> spdxLicenceNames = new TreeMap<>();
 
 		public SPDXIndex(ContentHandler contentHandler) {
 			try {
@@ -1651,7 +1671,7 @@ public class SBOMApplication implements IApplication {
 		public static void addAnnotation(Bom bom, String name, Stream<? extends CharSequence> values) {
 			var annotations = bom.getAnnotations();
 			if (annotations == null) {
-				annotations = new ArrayList<Annotation>();
+				annotations = new ArrayList<>();
 			}
 			annotations.add(createAnnotation(name, values));
 			bom.setAnnotations(annotations);

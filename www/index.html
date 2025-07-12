@@ -87,6 +87,7 @@
 		.hash,
 		.property,
 		.reference,
+		.ancestor,
 		.detail {
 			margin-left: 1.5em;
 		}
@@ -525,10 +526,32 @@ ${artifactURL}`;
 			}
 		}
 
+		function getPedigreeElements(component) {
+			const name = getModelValue(component, 'name');
+			if (name == 'com.jcraft.jsch') {
+				console.log("xxxx");
+			}
+			const pedigree = getModelValue(component, 'pedigree');
+			if (pedigree != null) {
+				console.log(pedigree);
+				const ancestors = getModelValue(pedigree, 'ancestors', []);
+				return ancestors.map(ancestor => `<div class="ancestor" style="display:none">
+<img class="icon" src="ancestor.svg"/>
+${getAncestorElementDetail(ancestor)}
+				</div > `);
+			}
+			return [];
+		}
+
+		function getAncestorElementDetail(ancestor) {
+			const purl = getModelValue(ancestor, 'purl');
+			return getPurlContent(purl);
+		}
+
 		function getReferenceElements(component) {
 			const references = getModelValue(component, 'externalReferences', []);
 			if (references != null) {
-				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style = "display:none" >
+				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style="display:none">
 					<img class="icon" src="reference.svg" />
 ${getReferenceElementDetail(reference)}
 </div > `);
@@ -772,6 +795,10 @@ ${getLicenseElementDetail(license)}
 				const elements = model.querySelectorAll(`:scope > ${property}`);
 				if (elements.length == 1) {
 					const element = elements.item(0);
+					if (property == 'pedigree') {
+						return element;
+					}
+
 					const children = element.children;
 					if (children.length == 0 && !(defaultValue instanceof Array)) {
 						return element.textContent;
@@ -1159,23 +1186,23 @@ ${getLicenseElementDetail(license)}
 
 			const componentElements = components.map(component => {
 				const purlElements = getPurlElement(component);
-
+				const pedigreeElements = getPedigreeElements(component);
 				const licenseElements = getLicenseElements(component);
 				const hashElements = getHashElements(component);
 				const propertyElements = getPropertyElements(component);
-				const references = getReferenceElements(component);
+				const referencesElements = getReferenceElements(component);
 				const detailElements = getDetailElements(component);
-
 				const incomingDependencyElements = getDependencyElements(incomingDependencyMap, component, 'incoming-dependency');
 				const outgoingDependencyElements = getDependencyElements(outgoingDependencyMap, component, 'outgoing-dependency');
 
 				return `<div style="white-space: nowrap;" id=${getModelValue(component, 'bom-ref')} class="${getComponentClassifier(component)}" data-showing="true">
 ${generateButton()}<span class="label">&nbsp;${getComponentIcon(component)} ${getComponentLabel(component)}<span>
 ${purlElements.join('\n')}
+${pedigreeElements.join('\n')}
 ${licenseElements.join('\n')}
 ${hashElements.join('\n')}
 ${propertyElements.join('\n')}
-${references.join('\n')}
+${referencesElements.join('\n')}
 ${detailElements.join('\n')}
 ${incomingDependencyElements.join('\n')}
 ${outgoingDependencyElements.join('\n')}
@@ -1347,16 +1374,13 @@ ${componentElements.join('\n')}
 				<hr />
 
 				<div>
-					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies<span class="count"></span></label>
-
-					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="purl"><img src="purl.svg" /> PURLs<span class="count"></span></label>
 
 					<br />
 
-					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="purl"><img src="purl.svg" /> PURLs<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="ancestor" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="ancestor"><img src="ancestor.svg" /> Predigree<span class="count"></span></label>
 
 					<br />
 
@@ -1384,6 +1408,13 @@ ${componentElements.join('\n')}
 					<label for="reference"><img src="reference.svg" /> External References<span class="count" data-total='*'></span></label>
 					<fieldset class="nested-filters" id="reference-filters">
 					</fieldset>
+
+					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies<span class="count"></span></label>
+
+					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
+					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
+
 				</div>
 			</form>
 		</fieldset>
