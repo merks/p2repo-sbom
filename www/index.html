@@ -325,7 +325,7 @@
 		// &#x25B7;
 		// &#x25E2;
 
-		const purlPattern = /^pkg:(?<scheme>[^/]+)\/((?<group>[^/]+)\/)?(?<name>[^&]+)@(?<version>[^/]+)(?<query>\?.*|)$/;
+		const purlPattern = /^pkg:(?<scheme>[^/]+)\/((?<group>[^/]+)\/)?(?<name>[^&]+)@(?<version>[^/?]+)(?<query>\?.*|)$/;
 
 		const componentMap = new Map();
 		const incomingDependencyMap = new Map();
@@ -490,8 +490,6 @@
 ${getIcon('purl.svg')}
 ${content}
  </div>`];
-				} else {
-					console.log(purl);
 				}
 			}
 			return [];
@@ -527,13 +525,8 @@ ${artifactURL}`;
 		}
 
 		function getPedigreeElements(component) {
-			const name = getModelValue(component, 'name');
-			if (name == 'com.jcraft.jsch') {
-				console.log("xxxx");
-			}
 			const pedigree = getModelValue(component, 'pedigree');
 			if (pedigree != null) {
-				console.log(pedigree);
 				const ancestors = getModelValue(pedigree, 'ancestors', []);
 				return ancestors.map(ancestor => `<div class="ancestor" style="display:none">
 <img class="icon" src="ancestor.svg"/>
@@ -704,9 +697,6 @@ ${getLicenseElementDetail(license)}
 				for (const link of links) {
 					result += `<span class="license-url"><a href="${url}">${url}</a></span>`;
 				}
-			}
-			if (result.length == 0) {
-				console.log(license.innerHTML);
 			}
 			return result;
 		}
