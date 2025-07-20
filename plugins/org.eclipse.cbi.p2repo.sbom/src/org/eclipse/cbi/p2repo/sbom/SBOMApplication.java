@@ -118,6 +118,7 @@ import org.eclipse.equinox.p2.metadata.MetadataFactory.InstallableUnitDescriptio
 import org.eclipse.equinox.p2.publisher.actions.JREAction;
 import org.eclipse.equinox.p2.query.QueryUtil;
 import org.eclipse.equinox.p2.repository.ICompositeRepository;
+import org.eclipse.equinox.p2.repository.IRepository;
 import org.eclipse.equinox.p2.repository.artifact.IArtifactDescriptor;
 import org.eclipse.equinox.p2.repository.artifact.IArtifactRepositoryManager;
 import org.eclipse.equinox.p2.repository.artifact.spi.ArtifactDescriptor;
@@ -239,7 +240,11 @@ public class SBOMApplication implements IApplication {
 
 		private final boolean verbose;
 
-		private final String input;
+		private final List<URI> combinedRepositoryURIs = new ArrayList<>();
+
+		private final List<URI> metadataRepositoryURIs = new ArrayList<>();
+
+		private final List<URI> artifactRepositoryURIs = new ArrayList<>();
 
 		private final boolean xml;
 
@@ -260,7 +265,13 @@ public class SBOMApplication implements IApplication {
 			spdxIndex = new SPDXIndex(contentHandler);
 
 			verbose = getArgument("-verbose", args);
-			input = getArgument("-input", args, null);
+
+			combinedRepositoryURIs.addAll(getArguments("-input", args, List.of()).stream().map(URI::create).toList());
+			metadataRepositoryURIs
+					.addAll(getArguments("-metadata", args, List.of()).stream().map(URI::create).toList());
+			artifactRepositoryURIs
+					.addAll(getArguments("-artifact", args, List.of()).stream().map(URI::create).toList());
+
 			xmlOutput = getArgument("-xml-output", args, null);
 			jsonOutput = getArgument("-json-output", args, null);
 			json = getArgument("-json", args);
@@ -285,12 +296,27 @@ public class SBOMApplication implements IApplication {
 
 		@Override
 		public IStatus run(IProgressMonitor monitor) throws ProvisionException {
-			if (input == null) {
-				System.err.println("An '-input' argument is required");
+			if (combinedRepositoryURIs.isEmpty() && metadataRepositoryURIs.isEmpty()) {
+				System.err.println("An '-input' or '-metadata' argument is required");
 				return Status.CANCEL_STATUS;
 			}
 
-			loadRepositories(monitor);
+			for (URI uri : combinedRepositoryURIs) {
+				loadRepositories(uri, Set.of(IRepository.TYPE_METADATA, IRepository.TYPE_ARTIFACT), monitor);
+			}
+
+			for (URI uri : metadataRepositoryURIs) {
+				loadRepositories(uri, Set.of(IRepository.TYPE_METADATA), monitor);
+			}
+
+			for (URI uri : artifactRepositoryURIs) {
+				loadRepositories(uri, Set.of(IRepository.TYPE_ARTIFACT), monitor);
+			}
+
+			metadataRepositories.addAll(
+					gatherSimpleRepositories(new HashSet<>(), new TreeMap<>(), getCompositeMetadataRepository()));
+
+			addJRE(monitor);
 
 			buildArtifactMappings();
 
@@ -432,22 +458,31 @@ public class SBOMApplication implements IApplication {
 			}
 		}
 
-		private void loadRepositories(IProgressMonitor monitor) throws ProvisionException {
-			var uri = URI.create(input);
-
+		private void loadRepositories(URI uri, Set<Integer> types, IProgressMonitor monitor) throws ProvisionException {
 			var repositoryDescriptor = new RepositoryDescriptor();
+			if (types.size() == 1) {
+				if (types.contains(IRepository.TYPE_METADATA)) {
+					repositoryDescriptor.setKind(RepositoryDescriptor.KIND_METADATA);
+				} else if (types.contains(IRepository.TYPE_ARTIFACT)) {
+					repositoryDescriptor.setKind(RepositoryDescriptor.KIND_ARTIFACT);
+				}
+			}
+
 			repositoryDescriptor.setLocation(uri);
 			addSource(repositoryDescriptor);
 
-			var metadataRepositoryManager = getMetadataRepositoryManager();
-			metadataRepositoryManager.loadRepository(uri, monitor);
+			if (types.contains(IRepository.TYPE_METADATA)) {
+				var metadataRepositoryManager = getMetadataRepositoryManager();
+				metadataRepositoryManager.loadRepository(uri, monitor);
+			}
 
-			var artifactRepositoryManager = getArtifactRepositoryManager();
-			artifactRepositoryManager.loadRepository(uri, monitor);
+			if (types.contains(IRepository.TYPE_ARTIFACT)) {
+				var artifactRepositoryManager = getArtifactRepositoryManager();
+				artifactRepositoryManager.loadRepository(uri, monitor);
+			}
+		}
 
-			metadataRepositories.addAll(
-					gatherSimpleRepositories(new HashSet<>(), new TreeMap<>(), getCompositeMetadataRepository()));
-
+		private void addJRE(IProgressMonitor monitor) throws ProvisionException {
 			if (metadataRepositoryManager.query(QueryUtil.createIUQuery(A_JRE_JAVASE_ID), null).isEmpty()) {
 				var jreIU = JREAction.createJREIU();
 				try {
