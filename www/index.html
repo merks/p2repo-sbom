@@ -322,8 +322,9 @@
 		const reset = '\u27F2';
 		const collapsed = '\u25B7';
 		const expanded = '\u25E2';
-		// &#x25B7;
-		// &#x25E2;
+
+		const showing = '\u25B2';
+		const hidden = '\u25BC';
 
 		const purlPattern = /^pkg:(?<scheme>[^/]+)\/((?<group>[^/]+)\/)?(?<name>[^&]+)@(?<version>[^/?]+)(?<query>\?.*|)$/;
 
@@ -380,11 +381,18 @@
 			element.setAttribute('data-showing', filtered);
 		}
 
+		function generateShowFieldsButton() {
+			return `<span class="action" onclick="toggleFields(this)">${showing}</span>`;
+		}
+
+		function toggleFields(button) {
+			const newState = button.innerText == showing ? hidden : showing;
+			button.innerText = newState;
+			document.getElementById('filters-form').style.display = button.innerText == showing ? 'block' : 'none';
+		}
+
 		function generateButton(all) {
 			return `<button ${all ? 'id="all"' : ''} class="toggle" onclick="${all ? 'toggleAll' : 'toggle'}(this)">${collapsed}</button>`;
-			// &#x25B7;
-			// &#x25E2;
-			// &#x25E2;
 		}
 
 		function toggleAll(button) {
@@ -442,6 +450,9 @@
 		}
 
 		function linkify(value) {
+			if (value.indexOf('://') < 0) {
+				return value;
+			}
 			try {
 				const url = new URL(value);
 				return `<a class="plain" href="${value}">${value}</a>`;
@@ -556,7 +567,7 @@ ${getReferenceElementDetail(reference)}
 			const type = getModelValue(reference, 'type');
 			componentExternalReferenceTypes.add(type);
 			const url = getModelValue(reference, 'url');
-			let actualURL = type == 'vcs' && url != null && url.indexOf('http') > 0 ? url.substring(url.indexOf('http')) : url;
+			let actualURL = type == 'vcs' && url != null > 0 ? extraSCMURL(url) : url;
 			// https://github.com/eclipse-platform/eclipse.platform.git?path=ant/org.eclipse.ant.core&tag=I20250304-0640&commitId=f928ecce547595cd272cb5ef6b5fabd58223e17d
 			// /https:\/\/github.com\/([^/]+)\/([^/]+)/.exec(actualURL);
 			if (actualURL.startsWith('https://github.com/') && actualURL.indexOf('?') != -1) {
@@ -564,7 +575,7 @@ ${getReferenceElementDetail(reference)}
 				const commitId = gitHubURL.searchParams.get('commitId');
 				const path = gitHubURL.searchParams.get('path');
 				if (path != null && commitId != null) {
-					actualURL = `${gitHubURL.origin}${gitHubURL.pathname.replace(/\.git$/, '')} /tree/${commitId}/${path}`;
+					actualURL = `${gitHubURL.origin}${gitHubURL.pathname.replace(/\.git$/, '')}/tree/${commitId}/${path}`;
 				}
 			}
 			return `
@@ -572,7 +583,18 @@ ${getReferenceElementDetail(reference)}
 <span class="reference-url"><a href="${actualURL}">${getFormattedHost(getFormattedQuery(url))}</a></span>`;
 		}
 
+		function extraSCMURL(url) {
+			const result = url.
+				replace(/^scm:git:git@([^:]+):/, 'https://$1:/').
+				replace(/^scm:git:(git:|ssh:)\/\//, 'https://').
+				replace(/^(scm:)?(git:|svn:)?(ssh:)?(git@)?https?:/, 'https:');
+			return result;
+		}
+
 		function getFormattedQuery(value) {
+			if (value.indexOf('?') < 0) {
+				return value;
+			}
 			try {
 				const url = new URL(value);
 				const searchParams = url.searchParams;
@@ -1049,9 +1071,9 @@ ${getLicenseElementDetail(license)}
 			fieldset.append(...toElements(`
 <div id="expand-all-section" style="font-size: 110%">
 	<div id="summary" style="display: none">
-	<hr>
 	</div>
 	<hr>
+	${generateShowFieldsButton('all')}
 	<span class="action" onclick="restore()" title="Reset Filters">${reset}</span>
 	${generateButton('all')}<span> Expand All</span>
 	<div id="busy-indicator" style="display: none">
@@ -1406,6 +1428,8 @@ ${componentElements.join('\n')}
 					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
 
 				</div>
+
+				<hr />
 			</form>
 		</fieldset>
 
