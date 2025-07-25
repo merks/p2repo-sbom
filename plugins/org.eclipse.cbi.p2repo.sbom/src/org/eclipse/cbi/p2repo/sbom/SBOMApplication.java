@@ -52,6 +52,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -103,8 +104,11 @@ import org.eclipse.equinox.app.IApplication;
 import org.eclipse.equinox.app.IApplicationContext;
 import org.eclipse.equinox.internal.p2.artifact.repository.simple.SimpleArtifactRepository;
 import org.eclipse.equinox.internal.p2.metadata.IRequiredCapability;
+import org.eclipse.equinox.internal.p2.metadata.InstallableUnit;
 import org.eclipse.equinox.internal.p2.metadata.repository.io.MetadataWriter;
+import org.eclipse.equinox.p2.core.IAgentLocation;
 import org.eclipse.equinox.p2.core.ProvisionException;
+import org.eclipse.equinox.p2.engine.IProfile;
 import org.eclipse.equinox.p2.internal.repository.tools.AbstractApplication;
 import org.eclipse.equinox.p2.internal.repository.tools.RepositoryDescriptor;
 import org.eclipse.equinox.p2.metadata.IArtifactKey;
@@ -119,6 +123,7 @@ import org.eclipse.equinox.p2.publisher.actions.JREAction;
 import org.eclipse.equinox.p2.query.QueryUtil;
 import org.eclipse.equinox.p2.repository.ICompositeRepository;
 import org.eclipse.equinox.p2.repository.IRepository;
+import org.eclipse.equinox.p2.repository.IRepositoryManager;
 import org.eclipse.equinox.p2.repository.artifact.IArtifactDescriptor;
 import org.eclipse.equinox.p2.repository.artifact.IArtifactRepositoryManager;
 import org.eclipse.equinox.p2.repository.artifact.spi.ArtifactDescriptor;
@@ -234,17 +239,21 @@ public class SBOMApplication implements IApplication {
 
 		private final Map<IInstallableUnit, Component> iuComponents = new LinkedHashMap<>();
 
-		private final ContentHandler contentHandler;
-
-		private final SPDXIndex spdxIndex;
-
-		private final boolean verbose;
-
 		private final List<URI> combinedRepositoryURIs = new ArrayList<>();
 
 		private final List<URI> metadataRepositoryURIs = new ArrayList<>();
 
 		private final List<URI> artifactRepositoryURIs = new ArrayList<>();
+
+		private final Set<IInstallableUnit> inclusiveContextIUs = new HashSet<>();
+
+		private final Set<IInstallableUnit> exclusiveContextIUs = new HashSet<>();
+
+		private final ContentHandler contentHandler;
+
+		private final SPDXIndex spdxIndex;
+
+		private final boolean verbose;
 
 		private final boolean xml;
 
@@ -253,6 +262,8 @@ public class SBOMApplication implements IApplication {
 		private final boolean json;
 
 		private final String jsonOutput;
+
+		private final URI installationLocation;
 
 		private IMetadataRepositoryManager metadataRepositoryManager;
 
@@ -266,6 +277,21 @@ public class SBOMApplication implements IApplication {
 
 			verbose = getArgument("-verbose", args);
 
+			var installation = getArgument("-installation", args, null);
+			if (installation != null) {
+				installationLocation = handleInstallation(installation);
+			} else {
+				installationLocation = null;
+			}
+
+			for (var requirementInclusions : getArguments("-requirement-inclusions", args, List.of())) {
+				inclusiveContextIUs.add(createContextIU(requirementInclusions));
+			}
+
+			for (var requirementExclusions : getArguments("-requirement-exclusions", args, List.of())) {
+				exclusiveContextIUs.add(createContextIU(requirementExclusions));
+			}
+
 			combinedRepositoryURIs.addAll(getArguments("-input", args, List.of()).stream().map(URI::create).toList());
 			metadataRepositoryURIs
 					.addAll(getArguments("-metadata", args, List.of()).stream().map(URI::create).toList());
@@ -276,6 +302,35 @@ public class SBOMApplication implements IApplication {
 			jsonOutput = getArgument("-json-output", args, null);
 			json = getArgument("-json", args);
 			xml = getArgument("-xml", args) || !json && xmlOutput == null && jsonOutput == null;
+		}
+
+		private URI handleInstallation(String installation) throws IOException {
+			var root = Path.of(installation);
+			var macConfigIni = root.resolve("Contents/Eclipse/configuration/config.ini");
+			var unixWinConfigIni = root.resolve("configuration/config.ini");
+			var configIni = Files.isRegularFile(macConfigIni) ? macConfigIni : unixWinConfigIni;
+			var properties = new Properties();
+			try (var input = Files.newInputStream(configIni)) {
+				properties.load(input);
+			}
+			var profileName = properties.getProperty("eclipse.p2.profile");
+			var p2DataArea = properties.getProperty("eclipse.p2.data.area");
+			var resolvedDataArea = p2DataArea.startsWith("@config.dir/")
+					? Path.of(
+							p2DataArea.replaceAll("^@config.dir", configIni.getParent().toString().replace('\\', '/')))
+					: Path.of(URI.create(p2DataArea));
+			var profileFolder = resolvedDataArea
+					.resolve("org.eclipse.equinox.p2.engine/profileRegistry/" + profileName + ".profile").normalize();
+			metadataRepositoryURIs.add(toURI(profileFolder));
+			return toURI(root);
+		}
+
+		private URI toURI(Path path) {
+			return toURI(path.toUri());
+		}
+
+		private URI toURI(URI uri) {
+			return URI.create(uri.toString().replaceAll("file:///", "file:/").replaceAll("/$", ""));
 		}
 
 		@Override
@@ -292,6 +347,10 @@ public class SBOMApplication implements IApplication {
 				artifactRepositoryManager = super.getArtifactRepositoryManager();
 			}
 			return artifactRepositoryManager;
+		}
+
+		private void removeRepository(URI uri) {
+			sourceRepositories.removeIf(it -> uri.equals(it.getRepoLocation()));
 		}
 
 		@Override
@@ -311,6 +370,23 @@ public class SBOMApplication implements IApplication {
 
 			for (URI uri : artifactRepositoryURIs) {
 				loadRepositories(uri, Set.of(IRepository.TYPE_ARTIFACT), monitor);
+			}
+
+			var artifactRepositoryManager = getArtifactRepositoryManager();
+			var rootLocation = agent.getService(IAgentLocation.class).getRootLocation();
+			for (URI uri : artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+				if (rootLocation.relativize(uri) != uri) {
+					artifactRepositoryManager.removeRepository(uri);
+					removeRepository(uri);
+				} else {
+					var repository = artifactRepositoryManager.loadRepository(uri, null);
+					var type = repository.getType();
+					if ("org.eclipse.equinox.p2.extensionlocation.artifactRepository".equals(type)
+							&& installationLocation != null && installationLocation.relativize(uri) == uri) {
+						artifactRepositoryManager.removeRepository(uri);
+						removeRepository(uri);
+					}
+				}
 			}
 
 			metadataRepositories.addAll(
@@ -342,6 +418,17 @@ public class SBOMApplication implements IApplication {
 				var dependency = new Dependency(bomRef);
 				bom.addDependency(dependency);
 				iusToDependencies.put(iu, dependency);
+
+				if (isMetadata(artifactDescriptor)) {
+					var artifacts = iu.getArtifacts();
+					if (iu.getId().endsWith(".feature.group")) {
+						component.addProperty(createProperty("missing-artifact", "org.eclipse.update.feature,"
+								+ iu.getId().replaceAll("\\.feature\\.group", "") + "," + iu.getVersion()));
+					} else if (!artifacts.isEmpty()) {
+						component.addProperty(createProperty("missing-artifact",
+								String.join(";", artifacts.stream().map(Object::toString).toList())));
+					}
+				}
 			}
 
 			// Gather details from the actual artifacts in parallel.
@@ -415,37 +502,39 @@ public class SBOMApplication implements IApplication {
 				}
 
 				var artifactKeys = iu.getArtifacts();
-				if (artifactKeys.isEmpty()) {
-					metadataArtifacts.add(iu);
-				} else {
-					for (var artifactKey : artifactKeys) {
-						for (var artifactDescriptor : artifactRepository.getArtifactDescriptors(artifactKey)) {
-							// Only process the canonical descriptor, i.e., not the pack200.
-							var format = artifactDescriptor.getProperty(IArtifactDescriptor.FORMAT);
-							if (format == null) {
-								associate(iu, artifactDescriptor);
+				var associated = false;
+				for (var artifactKey : artifactKeys) {
+					for (var artifactDescriptor : artifactRepository.getArtifactDescriptors(artifactKey)) {
+						// Only process the canonical descriptor, i.e., not the pack200.
+						var format = artifactDescriptor.getProperty(IArtifactDescriptor.FORMAT);
+						if (format == null) {
+							associate(iu, artifactDescriptor);
+							associated = true;
 
-								// Create the two-way map between feature IU and feature jar IU.
-								var id = iu.getId();
-								var matcher = FEATURE_JAR_PATTERN.matcher(id);
-								if (matcher.matches()) {
-									var iuQuery = QueryUtil.createIUQuery(matcher.group(1) + ".group", iu.getVersion());
-									var set = metadataRepositoryManager.query(iuQuery, null).toSet();
-									if (set.size() != 1) {
-										if (verbose) {
-											System.err.println("featureless-jar=" + iu);
-										}
-									} else {
-										var feature = set.iterator().next();
-										featureJarsToFeatures.put(iu, feature);
-										featuresToFeatureJars.put(feature, iu);
+							// Create the two-way map between feature IU and feature jar IU.
+							var id = iu.getId();
+							var matcher = FEATURE_JAR_PATTERN.matcher(id);
+							if (matcher.matches()) {
+								var iuQuery = QueryUtil.createIUQuery(matcher.group(1) + ".group", iu.getVersion());
+								var set = metadataRepositoryManager.query(iuQuery, null).toSet();
+								if (set.size() != 1) {
+									if (verbose) {
+										System.err.println("featureless-jar=" + iu);
 									}
+								} else {
+									var feature = set.iterator().next();
+									featureJarsToFeatures.put(iu, feature);
+									featuresToFeatureJars.put(feature, iu);
 								}
-
-								break;
 							}
+
+							break;
 						}
 					}
+				}
+
+				if (!associated) {
+					metadataArtifacts.add(iu);
 				}
 			}
 
@@ -473,13 +562,30 @@ public class SBOMApplication implements IApplication {
 
 			if (types.contains(IRepository.TYPE_METADATA)) {
 				var metadataRepositoryManager = getMetadataRepositoryManager();
-				metadataRepositoryManager.loadRepository(uri, monitor);
+				var repository = metadataRepositoryManager.loadRepository(uri, monitor);
+				var properties = repository.getProperties();
+				var environments = properties.get(IProfile.PROP_ENVIRONMENTS);
+				if (environments != null) {
+					inclusiveContextIUs.add(createContextIU(environments));
+					var references = repository.getReferences();
+					for (var reference : references) {
+						if (reference.getType() == IRepository.TYPE_ARTIFACT) {
+							artifactRepositoryURIs.add(toURI(reference.getLocation()));
+						}
+					}
+				}
 			}
 
 			if (types.contains(IRepository.TYPE_ARTIFACT)) {
 				var artifactRepositoryManager = getArtifactRepositoryManager();
 				artifactRepositoryManager.loadRepository(uri, monitor);
 			}
+		}
+
+		private IInstallableUnit createContextIU(String environments) {
+			Map<String, String> properties = Stream.of(environments.split(",")).map(property -> property.split("="))
+					.collect(Collectors.toMap(pair -> pair[0], pair -> pair[1]));
+			return InstallableUnit.contextIU(properties);
 		}
 
 		private void addJRE(IProgressMonitor monitor) throws ProvisionException {
@@ -591,6 +697,7 @@ public class SBOMApplication implements IApplication {
 						&& !"org.eclipse.update.feature.plugin".equals(key) //
 						&& !"pgp.trustedPublicKeys".equals(key) //
 						&& !"org.eclipse.update.feature.exclusive".equals(key) //
+						&& !"org.eclipse.oomph.p2.iu.compatibility".equals(key) //
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_GROUP.equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_FRAGMENT.equals(key)
 						&& !MetadataFactory.InstallableUnitDescription.PROP_TYPE_PRODUCT.equals(key)
@@ -629,7 +736,7 @@ public class SBOMApplication implements IApplication {
 
 		private void setPurl(Component component, IInstallableUnit iu, IArtifactDescriptor artifactDescriptor,
 				byte[] bytes) {
-			var mavenDescriptor = MavenDescriptor.create(artifactDescriptor);
+			var mavenDescriptor = MavenDescriptor.create(iu, artifactDescriptor);
 			if (mavenDescriptor != null && !mavenDescriptor.isSnapshot()) {
 				try {
 					// Document xmlContent =
@@ -721,7 +828,7 @@ public class SBOMApplication implements IApplication {
 				gatherLicencesFromJar(component, bytes, licenseToName);
 			}
 
-			var mavenDescriptor = MavenDescriptor.create(artifactDescriptor);
+			var mavenDescriptor = MavenDescriptor.create(iu, artifactDescriptor);
 			if (mavenDescriptor != null && !mavenDescriptor.isSnapshot()) {
 				try {
 					var content = contentHandler.getContent(mavenDescriptor.toPOMURI());
@@ -821,6 +928,28 @@ public class SBOMApplication implements IApplication {
 							addExternalReference(component, ExternalReference.Type.WEBSITE, bundleDoc);
 						}
 
+						var bundleSCM = headers.get("Bundle-SCM");
+						if (bundleSCM != null) {
+							var bundleSCMElements = ManifestElement.parseHeader("Bundle-SCM", bundleSCM);
+							var connection = "";
+							var tag = "";
+							for (var bundleSCMElement : bundleSCMElements) {
+								var parts = bundleSCMElement.getValue().split("=");
+								if (parts.length == 2) {
+									if ("connection".equals(parts[0])) {
+										connection = parts[1].replace("\"", "");
+									} else if ("tag".equals(parts[0])) {
+										tag = parts[1].replace("\"", "");
+									}
+								}
+							}
+							if (!connection.isEmpty()) {
+								addExternalReference(component, ExternalReference.Type.VCS,
+										connection + (tag.isEmpty() ? "" : "?tag=" + tag));
+								addGitHubIssues(component, connection);
+							}
+						}
+
 						var eclipseSourceReferences = headers.get("Eclipse-SourceReferences");
 						if (eclipseSourceReferences != null) {
 							var eclipseSourceReferenceElements = ManifestElement.parseHeader("Eclipse-SourceReferences",
@@ -833,15 +962,7 @@ public class SBOMApplication implements IApplication {
 														eclipseSourceReferenceElement.getAttribute(key))))
 										.collect(Collectors.joining("&", "?", ""));
 								addExternalReference(component, ExternalReference.Type.VCS, value + query);
-
-								var matcher = GITHUB_SCM_PATTERN.matcher(value);
-								if (matcher.matches()) {
-									var uri = URI.create("https://github.com/" + matcher.group("repo") + "/issues");
-									if (contentHandler.exists(uri)) {
-										addExternalReference(component, ExternalReference.Type.ISSUE_TRACKER,
-												uri.toString());
-									}
-								}
+								addGitHubIssues(component, value);
 							}
 						}
 					} else if (MAVEN_POM_PATTERN.matcher(name).matches()) {
@@ -873,6 +994,16 @@ public class SBOMApplication implements IApplication {
 				}
 			} catch (Exception ex) {
 				throw new RuntimeException(ex);
+			}
+		}
+
+		private void addGitHubIssues(Component component, String value) {
+			var matcher = GITHUB_SCM_PATTERN.matcher(value);
+			if (matcher.matches()) {
+				var uri = URI.create("https://github.com/" + matcher.group("repo") + "/issues");
+				if (contentHandler.exists(uri)) {
+					addExternalReference(component, ExternalReference.Type.ISSUE_TRACKER, uri.toString());
+				}
 			}
 		}
 
@@ -1070,6 +1201,17 @@ public class SBOMApplication implements IApplication {
 				if (requiredIUs.isEmpty()) {
 					var min = requirement.getMin();
 					if (min != 0) {
+						var filter = requirement.getFilter();
+						if (filter != null) {
+							if (!inclusiveContextIUs.isEmpty()
+									&& inclusiveContextIUs.stream().noneMatch(contextIU -> filter.isMatch(contextIU))) {
+								continue;
+							}
+							if (!exclusiveContextIUs.isEmpty()
+									&& exclusiveContextIUs.stream().anyMatch(contextIU -> filter.isMatch(contextIU))) {
+								continue;
+							}
+						}
 						component
 								.addProperty(BOMUtil.createProperty("unsatisfied-requirement", requirement.toString()));
 					}
@@ -1324,8 +1466,11 @@ public class SBOMApplication implements IApplication {
 	}
 
 	record MavenDescriptor(String groupId, String artifactId, String version, String classifier, String type) {
-		public static MavenDescriptor create(IArtifactDescriptor artifactDescriptor) {
+		public static MavenDescriptor create(IInstallableUnit iu, IArtifactDescriptor artifactDescriptor) {
 			var mavenDescriptor = create(artifactDescriptor.getProperties());
+			if (mavenDescriptor == null) {
+				mavenDescriptor = create(iu.getProperties());
+			}
 			if (mavenDescriptor == null && !isMetadata(artifactDescriptor)) {
 				// System.err.println("###" + artifactDescriptor);
 			}
@@ -1729,6 +1874,23 @@ public class SBOMApplication implements IApplication {
 			var externalReference = createExternalReference(type, url);
 			var externalReferences = component.getExternalReferences();
 			if (externalReferences == null || !externalReferences.contains(externalReference)) {
+				if (externalReferences != null) {
+					for (ExternalReference otherExternalReference : externalReferences) {
+						if (otherExternalReference.getType() == type) {
+							var otherURL = otherExternalReference.getUrl();
+							if (otherURL.startsWith(url)) {
+								if (otherURL.charAt(url.length()) == '?') {
+									return;
+								}
+							} else if (url.startsWith(otherURL)) {
+								if (url.charAt(otherURL.length()) == '?') {
+									otherExternalReference.setUrl(url);
+									return;
+								}
+							}
+						}
+					}
+				}
 				component.addExternalReference(externalReference);
 			}
 		}
