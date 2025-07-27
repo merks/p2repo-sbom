@@ -24,6 +24,7 @@ import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.newDocumentBui
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -79,6 +80,8 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.cyclonedx.Version;
 import org.cyclonedx.generators.BomGeneratorFactory;
 import org.cyclonedx.generators.xml.BomXmlGenerator;
@@ -249,6 +252,8 @@ public class SBOMApplication implements IApplication {
 
 		private final Set<IInstallableUnit> exclusiveContextIUs = new HashSet<>();
 
+		private final Map<URI, URI> uriRedirections = new LinkedHashMap<>();
+
 		private final ContentHandler contentHandler;
 
 		private final SPDXIndex spdxIndex;
@@ -305,7 +310,7 @@ public class SBOMApplication implements IApplication {
 		}
 
 		private URI handleInstallation(String installation) throws IOException {
-			var root = Path.of(installation);
+			var root = getInstallationPath(installation);
 			var macConfigIni = root.resolve("Contents/Eclipse/configuration/config.ini");
 			var unixWinConfigIni = root.resolve("configuration/config.ini");
 			var configIni = Files.isRegularFile(macConfigIni) ? macConfigIni : unixWinConfigIni;
@@ -325,12 +330,24 @@ public class SBOMApplication implements IApplication {
 			return toURI(root);
 		}
 
+		private Path getInstallationPath(String installation) throws IOException {
+			if (installation.startsWith("https://")) {
+				var installationOriginatingURI = URI.create(installation);
+				var extractedInstallation = IOUtil
+						.extractInstallation(contentHandler.getContentCache(installationOriginatingURI));
+				var installationParentURI = toURI(extractedInstallation.getParent().resolve("."));
+				uriRedirections.put(installationParentURI, URI.create("archive:" + installationOriginatingURI + "!/"));
+				return extractedInstallation;
+			}
+			return Path.of(installationLocation);
+		}
+
 		private URI toURI(Path path) {
 			return toURI(path.toUri());
 		}
 
 		private URI toURI(URI uri) {
-			return URI.create(uri.toString().replaceAll("file:///", "file:/").replaceAll("/$", ""));
+			return URI.create(uri.toString().replaceAll("file:///", "file:/").replaceAll("/$", "")).normalize();
 		}
 
 		@Override
@@ -771,13 +788,24 @@ public class SBOMApplication implements IApplication {
 				}
 			}
 
-			var location = isMetadata(artifactDescriptor) ? URI.create(artifactDescriptor.getProperty("location"))
-					: artifactDescriptor.getRepository().getLocation();
+			var location = getRedirectedURI(
+					isMetadata(artifactDescriptor) ? URI.create(artifactDescriptor.getProperty("location"))
+							: artifactDescriptor.getRepository().getLocation());
 			var artifactKey = artifactDescriptor.getArtifactKey();
 			var encodedLocation = urlEncodeQueryParameter(location.toString());
 			var purl = "pkg:p2/" + artifactKey.getId() + "@" + artifactKey.getVersion() + "?classifier="
 					+ artifactKey.getClassifier() + "&location=" + encodedLocation;
 			component.setPurl(purl);
+		}
+
+		private URI getRedirectedURI(URI location) {
+			for (var entry : uriRedirections.entrySet()) {
+				var relativizedURI = entry.getKey().relativize(location);
+				if (relativizedURI.getScheme() == null) {
+					return URI.create(entry.getValue().toString() + relativizedURI);
+				}
+			}
+			return location;
 		}
 
 		private void getClearlyDefinedProperty(Component component, MavenDescriptor mavenDescriptor) {
@@ -1733,6 +1761,11 @@ public class SBOMApplication implements IApplication {
 			return getContent(uri, Files::readAllBytes, Files::write, BodyHandlers.ofByteArray());
 		}
 
+		public Path getContentCache(URI uri) throws IOException {
+			return getContent(uri, path -> path, (path, t) -> {
+			}, BodyHandlers.ofFile(getCachePath(uri)));
+		}
+
 		public <T> T getContent(URI uri, Reader<T> reader, Writer<T> writer, BodyHandler<T> bodyHandler)
 				throws IOException {
 			if ("file".equals(uri.getScheme())) {
@@ -1750,8 +1783,8 @@ public class SBOMApplication implements IApplication {
 			}
 
 			try {
-				var content = basicGetContent(uri, bodyHandler);
 				Files.createDirectories(path.getParent());
+				var content = basicGetContent(uri, bodyHandler);
 				writer.write(path, content);
 				return content;
 			} catch (ContentHandlerException e) {
@@ -1917,6 +1950,82 @@ public class SBOMApplication implements IApplication {
 			// and do not need to be encoded within a URI's query string.
 			var result = URLEncoder.encode(value, StandardCharsets.UTF_8);
 			return result.replace("%2F", "/").replace("%3A", ":");
+		}
+	}
+
+	public static final class IOUtil {
+		private static final Pattern SUPPORTED_ARCHIVE_PATTERN = Pattern
+				.compile("(?<name>.*)\\.(?<extension>zip|tar|tar.gz)$");
+
+		private IOUtil() {
+		}
+
+		private static Path extractInstallation(Path archive) throws IOException {
+			var fileName = archive.getFileName().toString();
+			var matcher = SUPPORTED_ARCHIVE_PATTERN.matcher(fileName);
+			if (!matcher.matches()) {
+				throw new IllegalArgumentException("Unsupported archive format");
+			}
+			var baseName = matcher.group("name");
+			var extension = matcher.group("extension");
+			var target = archive.resolveSibling(baseName);
+			if (!Files.isDirectory(target)) {
+				Files.createDirectory(target);
+				switch (extension) {
+				case "zip": {
+					try (var in = Files.newInputStream(archive)) {
+						extractZip(in, target);
+					}
+					break;
+				}
+				case "tar": {
+					try (var in = Files.newInputStream(archive)) {
+						extractTar(in, target);
+					}
+					break;
+				}
+				case "tar.gz": {
+					try (InputStream in = new GzipCompressorInputStream(Files.newInputStream(archive))) {
+						extractTar(in, target);
+					}
+					break;
+				}
+				}
+			}
+
+			try (var targetContents = Files.newDirectoryStream(target, Files::isDirectory)) {
+				for (Path path : targetContents) {
+					return path;
+				}
+			}
+
+			throw new IllegalArgumentException("The folder " + target + "is empty");
+		}
+
+		private static void extractZip(InputStream in, Path target) throws IOException {
+			try (var tar = new ZipInputStream(in)) {
+				for (var entry = tar.getNextEntry(); entry != null; entry = tar.getNextEntry()) {
+					var path = target.resolve(entry.getName());
+					if (entry.isDirectory()) {
+						Files.createDirectory(path);
+					} else {
+						Files.copy(tar, path);
+					}
+				}
+			}
+		}
+
+		private static void extractTar(InputStream in, Path target) throws IOException {
+			try (var tar = new TarArchiveInputStream(in)) {
+				for (var entry = tar.getNextEntry(); entry != null; entry = tar.getNextEntry()) {
+					var path = target.resolve(entry.getName());
+					if (entry.isDirectory()) {
+						Files.createDirectory(path);
+					} else {
+						Files.copy(tar, path);
+					}
+				}
+			}
 		}
 	}
 }
