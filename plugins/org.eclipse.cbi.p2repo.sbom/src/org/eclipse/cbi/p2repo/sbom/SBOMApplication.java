@@ -17,6 +17,7 @@ import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.computeHash;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createBomXMLGenerator;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createProperty;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.urlEncodeQueryParameter;
+import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.IOUtil.extractInstallation;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.evaluate;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.getText;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.newDocumentBuilder;
@@ -182,8 +183,135 @@ public class SBOMApplication implements IApplication {
 
 	@Override
 	public Object start(IApplicationContext context) throws Exception {
-		new SBOMGenerator(context).run(new NullProgressMonitor());
+		var args = getArguments(context);
+		var sbomGenerators = new ArrayList<SBOMGenerator>();
+		var installationsFolder = getArgument("-installations", args, null);
+		if (installationsFolder != null) {
+			var installationPattern = Pattern
+					.compile(getArgument("-installation-pattern", args, ".*\\.(zip|tar|tar.gz)$"));
+			var xmlOutputsFolder = getArgument("-xml-outputs", args, null);
+			var jsonOutputsFolder = getArgument("-json-outputs", args, null);
+			try (var contents = Files.newDirectoryStream(Path.of(installationsFolder),
+					path -> installationPattern.matcher(path.getFileName().toString()).matches())) {
+				for (Path path : contents) {
+					var effectArgs = new ArrayList<>(args);
+					effectArgs.add("-installation");
+					effectArgs.add(path.toString());
+					if (xmlOutputsFolder != null) {
+						effectArgs.add("-xml-output");
+						effectArgs.add(xmlOutputsFolder + "/"
+								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.xml"));
+					}
+					if (jsonOutputsFolder != null) {
+						effectArgs.add("-json-output");
+						effectArgs.add(jsonOutputsFolder + "/"
+								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.json"));
+					}
+
+					var sbomGenerator = new SBOMGenerator(effectArgs);
+					sbomGenerator.run(new NullProgressMonitor());
+					sbomGenerators.add(sbomGenerator);
+					break;
+				}
+			}
+		} else {
+			var sbomGenerator = new SBOMGenerator(args);
+			sbomGenerators.add(sbomGenerator);
+			sbomGenerator.run(new NullProgressMonitor());
+		}
+
+		var index = getArgument("-index", args, null);
+		if (index != null) {
+			var indexPath = Path.of(index);
+			generateIndex(indexPath, URI.create("http://localhost/sbom/"), sbomGenerators);
+		}
+
 		return null;
+	}
+
+	private void generateIndex(Path indexPath, URI renderer, List<SBOMGenerator> sbomGenerators) throws IOException {
+		var html = """
+				<!DOCTYPE html>
+				<html lang=en>
+
+				<head>
+					<title>blah</title>
+					<link rel="icon" type="image/ico" href="https://download.eclipse.org/cbi/sbom/favicon.ico">
+						<style>
+							img {
+								max-height: 3ex;
+							}
+
+						</style>
+				</head>
+
+				<body>
+					<table>
+						${items}
+					</table>
+				</body>
+
+				<script>
+					// This allows the arguments to the file query parameter to be relative such that the folder with the index.html and the SBOMs is portanble.
+					for (const a of document.querySelectorAll('a')) {
+						const href = a.href;
+						const match = /(?<renderer>.*\\?file=)(?<file>.*)/.exec(href);
+						if (match) {
+							const renderer = match.groups.renderer;
+							const file = match.groups.file;
+							const resolvedURL = new URL(file, location);
+							a.href = `${renderer}${resolvedURL}`;
+						}
+					}
+				</script>
+
+				</html>
+				""";
+
+		html = html.replace("${title}", "SBOM Index");
+		var items = new ArrayList<String>();
+		for (var sbomGenerator : sbomGenerators) {
+			var content = new ArrayList<String>();
+			var inputs = sbomGenerator.getInputs();
+			var foo = inputs.stream().map(SBOMApplication::toLink)
+					.collect(Collectors.joining("<br/>", "<td>", "</td>"));
+			content.add(foo);
+
+			var outputs = sbomGenerator.getOutputs();
+			for (var output : outputs) {
+				var relativize = indexPath.getParent().relativize(output);
+				var label = relativize.toString().endsWith(".json") ? "json" : "xml";
+				var hrefs = """
+						<td><a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=white&labelColor=darkorange&color=gray"/></a></td>
+						<td><a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=white&labelColor=darkorange&color=gray"/></a></td>
+						""";
+				hrefs = hrefs.replace("${renderer}", renderer.toString()).replace("${file}", relativize.toString())
+						.replace("${label}", label);
+				content.add(hrefs);
+			}
+
+			var item = """
+					<tr>
+						${content}
+					</tr>
+					""";
+			items.add(item.replace("${content}", String.join("\n", content).replace("\n", "\n	")));
+		}
+		var foo = String.join("\n", items).replace("\n", "\n		");
+		html = html.replace("${items}", foo);
+		System.err.println("#>" + html + "<#");
+		Files.writeString(indexPath, html);
+	}
+
+	private static String toLink(URI uri) {
+		var value = uri.toString();
+		var ARCHIVE_PATTERN = Pattern.compile("archive:(.*)!/.*");
+		var archiveMatcher = ARCHIVE_PATTERN.matcher(value);
+		var baseURI = archiveMatcher.matches() ? archiveMatcher.group(1) : value;
+		var NAME_PATTERN = Pattern.compile(".*/([^/]+)");
+		var nameMatcher = NAME_PATTERN.matcher(baseURI);
+		var name = nameMatcher.matches() ? nameMatcher.group(1) : baseURI;
+		return "<a href='" + baseURI + "'/>" + name + "</a>";
 	}
 
 	@Override
@@ -248,11 +376,17 @@ public class SBOMApplication implements IApplication {
 
 		private final List<URI> artifactRepositoryURIs = new ArrayList<>();
 
-		private final Set<IInstallableUnit> inclusiveContextIUs = new HashSet<>();
+		private final List<IInstallableUnit> inclusiveContextIUs = new ArrayList<>();
 
-		private final Set<IInstallableUnit> exclusiveContextIUs = new HashSet<>();
+		private final List<IInstallableUnit> exclusiveContextIUs = new ArrayList<>();
 
-		private final Map<URI, URI> uriRedirections = new LinkedHashMap<>();
+		private final Map<URI, URI> uriRedirections = new TreeMap<>((o1, o2) -> {
+			// Longest URI first for redirection.
+			var result = Integer.compare(o2.toString().length(), o1.toString().length());
+			return result == 0 ? o1.compareTo(o2) : result;
+		});
+
+		private final List<Path> outputs = new ArrayList<>();
 
 		private final ContentHandler contentHandler;
 
@@ -274,13 +408,19 @@ public class SBOMApplication implements IApplication {
 
 		private IArtifactRepositoryManager artifactRepositoryManager;
 
-		private SBOMGenerator(IApplicationContext context) throws Exception {
-			var args = getArguments(context);
-
+		private SBOMGenerator(List<String> args) throws Exception {
 			contentHandler = new ContentHandler(getArgument("-cache", args, null));
 			spdxIndex = new SPDXIndex(contentHandler);
 
 			verbose = getArgument("-verbose", args);
+
+			for (var uriRedirection : getArguments("-redirections", args, List.of())) {
+				var pair = uriRedirection.split("->");
+				if (pair.length != 2) {
+					throw new IllegalArgumentException("Expected a '->' in the redirection:" + uriRedirection);
+				}
+				uriRedirections.put(toURI(pair[0]), toURI(pair[1]));
+			}
 
 			var installation = getArgument("-installation", args, null);
 			if (installation != null) {
@@ -309,6 +449,22 @@ public class SBOMApplication implements IApplication {
 			xml = getArgument("-xml", args) || !json && xmlOutput == null && jsonOutput == null;
 		}
 
+		public List<Path> getOutputs() {
+			return outputs;
+		}
+
+		public List<URI> getInputs() {
+			var result = new ArrayList<URI>();
+			if (installationLocation != null) {
+				result.add(getRedirectedURI(installationLocation));
+			} else {
+				result.addAll(combinedRepositoryURIs);
+				result.addAll(metadataRepositoryURIs);
+				result.addAll(artifactRepositoryURIs);
+			}
+			return result;
+		}
+
 		private URI handleInstallation(String installation) throws IOException {
 			var root = getInstallationPath(installation);
 			var macConfigIni = root.resolve("Contents/Eclipse/configuration/config.ini");
@@ -333,13 +489,25 @@ public class SBOMApplication implements IApplication {
 		private Path getInstallationPath(String installation) throws IOException {
 			if (installation.startsWith("https://")) {
 				var installationOriginatingURI = URI.create(installation);
-				var extractedInstallation = IOUtil
-						.extractInstallation(contentHandler.getContentCache(installationOriginatingURI));
+				var extractedInstallation = extractInstallation(
+						contentHandler.getContentCache(installationOriginatingURI));
 				var installationParentURI = toURI(extractedInstallation.getParent().resolve("."));
 				uriRedirections.put(installationParentURI, URI.create("archive:" + installationOriginatingURI + "!/"));
 				return extractedInstallation;
 			}
-			return Path.of(installationLocation);
+			var installationPath = Path.of(installation);
+			if (Files.isRegularFile(installationPath)) {
+				var installationOriginatingURI = getRedirectedURI(toURI(installationPath));
+				var extractedInstallation = extractInstallation(installationPath);
+				var installationParentURI = toURI(extractedInstallation.getParent().resolve("."));
+				uriRedirections.put(installationParentURI, URI.create("archive:" + installationOriginatingURI + "!/"));
+				return extractedInstallation;
+			}
+			return installationPath;
+		}
+
+		private URI toURI(String value) {
+			return value.startsWith("https://") ? URI.create(value) : toURI(Path.of(value));
 		}
 
 		private URI toURI(Path path) {
@@ -350,10 +518,23 @@ public class SBOMApplication implements IApplication {
 			return URI.create(uri.toString().replaceAll("file:///", "file:/").replaceAll("/$", "")).normalize();
 		}
 
+		// Ensure that nothing leaks from previous calls or from some internal defaults.
+		// Loading profile metadata can cause artifact repositories to be loaded.
+		private void initRepositoryManagers() {
+			metadataRepositoryManager = super.getMetadataRepositoryManager();
+			for (URI uri : metadataRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+				metadataRepositoryManager.removeRepository(uri);
+			}
+			artifactRepositoryManager = super.getArtifactRepositoryManager();
+			for (URI uri : artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+				artifactRepositoryManager.removeRepository(uri);
+			}
+		}
+
 		@Override
 		protected IMetadataRepositoryManager getMetadataRepositoryManager() {
 			if (metadataRepositoryManager == null) {
-				metadataRepositoryManager = super.getMetadataRepositoryManager();
+				initRepositoryManagers();
 			}
 			return metadataRepositoryManager;
 		}
@@ -361,7 +542,7 @@ public class SBOMApplication implements IApplication {
 		@Override
 		protected IArtifactRepositoryManager getArtifactRepositoryManager() {
 			if (artifactRepositoryManager == null) {
-				artifactRepositoryManager = super.getArtifactRepositoryManager();
+				initRepositoryManagers();
 			}
 			return artifactRepositoryManager;
 		}
@@ -587,7 +768,20 @@ public class SBOMApplication implements IApplication {
 					var references = repository.getReferences();
 					for (var reference : references) {
 						if (reference.getType() == IRepository.TYPE_ARTIFACT) {
-							artifactRepositoryURIs.add(toURI(reference.getLocation()));
+							var locationURI = toURI(reference.getLocation());
+							var cache = properties.get(IProfile.PROP_CACHE);
+							if (cache != null) {
+								var cacheURI = toURI(cache);
+								if (locationURI.equals(cacheURI)
+										&& installationLocation.relativize(locationURI) == locationURI) {
+									var artifactsXMLFolder = findArtifactsXMLFolder(uri);
+									if (artifactsXMLFolder != null) {
+										artifactRepositoryURIs.add(artifactsXMLFolder);
+										continue;
+									}
+								}
+							}
+							artifactRepositoryURIs.add(locationURI);
 						}
 					}
 				}
@@ -597,6 +791,15 @@ public class SBOMApplication implements IApplication {
 				var artifactRepositoryManager = getArtifactRepositoryManager();
 				artifactRepositoryManager.loadRepository(uri, monitor);
 			}
+		}
+
+		private URI findArtifactsXMLFolder(URI uri) {
+			for (var path = Path.of(uri).getParent(); path != null; path = path.getParent()) {
+				if (Files.isRegularFile(path.resolve("artifacts.xml"))) {
+					return toURI(path);
+				}
+			}
+			return null;
 		}
 
 		private IInstallableUnit createContextIU(String environments) {
@@ -1298,7 +1501,9 @@ public class SBOMApplication implements IApplication {
 						System.out.println(xmlString);
 					}
 					if (xmlOutput != null) {
-						Files.writeString(Path.of(xmlOutput), xmlString);
+						var output = Path.of(xmlOutput);
+						outputs.add(output);
+						Files.writeString(output, xmlString);
 					}
 				} catch (Exception ex) {
 					throw new RuntimeException(ex);
@@ -1406,7 +1611,9 @@ public class SBOMApplication implements IApplication {
 						System.out.println(jsonString);
 					}
 					if (jsonOutput != null) {
-						Files.writeString(Path.of(jsonOutput), jsonString);
+						var output = Path.of(jsonOutput);
+						outputs.add(output);
+						Files.writeString(output, jsonString);
 
 					}
 				} catch (Exception ex) {
@@ -1732,8 +1939,8 @@ public class SBOMApplication implements IApplication {
 				}
 
 				try {
-					basicHead(uri, BodyHandlers.ofString());
 					Files.createDirectories(path.getParent());
+					basicHead(uri, BodyHandlers.ofString());
 					Files.writeString(path, "");
 					return true;
 				} catch (ContentHandlerException e) {
@@ -1960,7 +2167,7 @@ public class SBOMApplication implements IApplication {
 		private IOUtil() {
 		}
 
-		private static Path extractInstallation(Path archive) throws IOException {
+		public static Path extractInstallation(Path archive) throws IOException {
 			var fileName = archive.getFileName().toString();
 			var matcher = SUPPORTED_ARCHIVE_PATTERN.matcher(fileName);
 			if (!matcher.matches()) {
@@ -1994,12 +2201,15 @@ public class SBOMApplication implements IApplication {
 			}
 
 			try (var targetContents = Files.newDirectoryStream(target, Files::isDirectory)) {
+				var paths = new ArrayList<Path>();
 				for (Path path : targetContents) {
-					return path;
+					paths.add(path);
 				}
+				if (paths.isEmpty()) {
+					throw new IllegalArgumentException("The folder " + target + "is empty");
+				}
+				return paths.size() == 1 ? paths.get(0) : target;
 			}
-
-			throw new IllegalArgumentException("The folder " + target + "is empty");
 		}
 
 		private static void extractZip(InputStream in, Path target) throws IOException {
