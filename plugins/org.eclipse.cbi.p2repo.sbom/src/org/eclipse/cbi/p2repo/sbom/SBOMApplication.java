@@ -215,7 +215,6 @@ public class SBOMApplication implements IApplication {
 					var sbomGenerator = new SBOMGenerator(effectiveArgs);
 					sbomGenerator.run(new NullProgressMonitor());
 					sbomGenerators.add(sbomGenerator);
-					break;
 				}
 			}
 		} else {
@@ -230,7 +229,8 @@ public class SBOMApplication implements IApplication {
 			if (verbose) {
 				System.out.println("Generating Index: " + index);
 			}
-			generateIndex(indexPath, URI.create("http://localhost/sbom/"), sbomGenerators);
+			var render = getArgument("-renderer", args, "https://download.eclipse.org/cbi/sbom");
+			generateIndex(indexPath, URI.create(render), sbomGenerators);
 		}
 
 		return null;
@@ -256,21 +256,21 @@ public class SBOMApplication implements IApplication {
 					<table>
 						${items}
 					</table>
-				</body>
 
-				<script>
-					// This allows the arguments to the file query parameter to be relative such that the folder with the index.html and the SBOMs is portanble.
-					for (const a of document.querySelectorAll('a')) {
-						const href = a.href;
-						const match = /(?<renderer>.*\\?file=)(?<file>.*)/.exec(href);
-						if (match) {
-							const renderer = match.groups.renderer;
-							const file = match.groups.file;
-							const resolvedURL = new URL(file, location);
-							a.href = `${renderer}${resolvedURL}`;
+					<script>
+						// This allows the arguments to the file query parameter to be relative such that the folder with the index.html and the SBOMs is portable.
+						for (const a of document.querySelectorAll('a')) {
+							const href = a.href;
+							const match = /(?<renderer>.*\\?file=)(?<file>.*)/.exec(href);
+							if (match) {
+								const renderer = match.groups.renderer;
+								const file = match.groups.file;
+								const resolvedURL = new URL(file, location);
+								a.href = `${renderer}${resolvedURL}`;
+							}
 						}
-					}
-				</script>
+					</script>
+				</body>
 
 				</html>
 				""";
@@ -280,9 +280,9 @@ public class SBOMApplication implements IApplication {
 		for (var sbomGenerator : sbomGenerators) {
 			var content = new ArrayList<String>();
 			var inputs = sbomGenerator.getInputs();
-			var foo = inputs.stream().map(SBOMApplication::toLink)
+			var inputLinks = inputs.stream().map(SBOMApplication::toLink)
 					.collect(Collectors.joining("<br/>", "<td>", "</td>"));
-			content.add(foo);
+			content.add(inputLinks);
 
 			var outputs = sbomGenerator.getOutputs();
 			for (var output : outputs) {
@@ -304,9 +304,9 @@ public class SBOMApplication implements IApplication {
 					""";
 			items.add(item.replace("${content}", String.join("\n", content).replace("\n", "\n	")));
 		}
-		var foo = String.join("\n", items).replace("\n", "\n		");
-		html = html.replace("${items}", foo);
-		System.err.println("#>" + html + "<#");
+
+		var formattedItems = String.join("\n", items).replace("\n", "\n		");
+		html = html.replace("${items}", formattedItems);
 		Files.writeString(indexPath, html);
 	}
 
@@ -315,10 +315,10 @@ public class SBOMApplication implements IApplication {
 		var ARCHIVE_PATTERN = Pattern.compile("archive:(.*)!/.*");
 		var archiveMatcher = ARCHIVE_PATTERN.matcher(value);
 		var baseURI = archiveMatcher.matches() ? archiveMatcher.group(1) : value;
-		var NAME_PATTERN = Pattern.compile(".*/([^/]+)");
-		var nameMatcher = NAME_PATTERN.matcher(baseURI);
-		var name = nameMatcher.matches() ? nameMatcher.group(1) : baseURI;
-		return "<a href='" + baseURI + "'/>" + name + "</a>";
+		// var NAME_PATTERN = Pattern.compile(".*/([^/]+)");
+		// var nameMatcher = NAME_PATTERN.matcher(baseURI);
+		// var name = nameMatcher.matches() ? nameMatcher.group(1) : baseURI;
+		return "<a href='" + baseURI + "'>" + baseURI + "</a>";
 	}
 
 	@Override
