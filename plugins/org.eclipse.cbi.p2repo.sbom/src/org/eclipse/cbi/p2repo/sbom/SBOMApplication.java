@@ -186,6 +186,7 @@ public class SBOMApplication implements IApplication {
 		var args = getArguments(context);
 		var sbomGenerators = new ArrayList<SBOMGenerator>();
 		var installationsFolder = getArgument("-installations", args, null);
+		var verbose = getArgument("-verbose", args);
 		if (installationsFolder != null) {
 			var installationPattern = Pattern
 					.compile(getArgument("-installation-pattern", args, ".*\\.(zip|tar|tar.gz)$"));
@@ -194,21 +195,24 @@ public class SBOMApplication implements IApplication {
 			try (var contents = Files.newDirectoryStream(Path.of(installationsFolder).toAbsolutePath(),
 					path -> installationPattern.matcher(path.getFileName().toString()).matches())) {
 				for (Path path : contents) {
-					var effectArgs = new ArrayList<>(args);
-					effectArgs.add("-installation");
-					effectArgs.add(path.toString());
+					var effectiveArgs = new ArrayList<>(args);
+					if (verbose) {
+						effectiveArgs.add(0, "-verbose");
+					}
+					effectiveArgs.add("-installation");
+					effectiveArgs.add(path.toString());
 					if (xmlOutputsFolder != null) {
-						effectArgs.add("-xml-output");
-						effectArgs.add(xmlOutputsFolder + "/"
+						effectiveArgs.add("-xml-output");
+						effectiveArgs.add(xmlOutputsFolder + "/"
 								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.xml"));
 					}
 					if (jsonOutputsFolder != null) {
-						effectArgs.add("-json-output");
-						effectArgs.add(jsonOutputsFolder + "/"
+						effectiveArgs.add("-json-output");
+						effectiveArgs.add(jsonOutputsFolder + "/"
 								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.json"));
 					}
 
-					var sbomGenerator = new SBOMGenerator(effectArgs);
+					var sbomGenerator = new SBOMGenerator(effectiveArgs);
 					sbomGenerator.run(new NullProgressMonitor());
 					sbomGenerators.add(sbomGenerator);
 					break;
@@ -223,6 +227,9 @@ public class SBOMApplication implements IApplication {
 		var index = getArgument("-index", args, null);
 		if (index != null) {
 			var indexPath = Path.of(index).toAbsolutePath();
+			if (verbose) {
+				System.out.println("Generating Index: " + index);
+			}
 			generateIndex(indexPath, URI.create("http://localhost/sbom/"), sbomGenerators);
 		}
 
