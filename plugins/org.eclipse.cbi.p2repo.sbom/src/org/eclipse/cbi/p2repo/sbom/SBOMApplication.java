@@ -191,7 +191,7 @@ public class SBOMApplication implements IApplication {
 					.compile(getArgument("-installation-pattern", args, ".*\\.(zip|tar|tar.gz)$"));
 			var xmlOutputsFolder = getArgument("-xml-outputs", args, null);
 			var jsonOutputsFolder = getArgument("-json-outputs", args, null);
-			try (var contents = Files.newDirectoryStream(Path.of(installationsFolder),
+			try (var contents = Files.newDirectoryStream(Path.of(installationsFolder).toAbsolutePath(),
 					path -> installationPattern.matcher(path.getFileName().toString()).matches())) {
 				for (Path path : contents) {
 					var effectArgs = new ArrayList<>(args);
@@ -222,7 +222,7 @@ public class SBOMApplication implements IApplication {
 
 		var index = getArgument("-index", args, null);
 		if (index != null) {
-			var indexPath = Path.of(index);
+			var indexPath = Path.of(index).toAbsolutePath();
 			generateIndex(indexPath, URI.create("http://localhost/sbom/"), sbomGenerators);
 		}
 
@@ -495,7 +495,7 @@ public class SBOMApplication implements IApplication {
 				uriRedirections.put(installationParentURI, URI.create("archive:" + installationOriginatingURI + "!/"));
 				return extractedInstallation;
 			}
-			var installationPath = Path.of(installation);
+			var installationPath = Path.of(installation).toAbsolutePath();
 			if (Files.isRegularFile(installationPath)) {
 				var installationOriginatingURI = getRedirectedURI(toURI(installationPath));
 				var extractedInstallation = extractInstallation(installationPath);
@@ -1501,7 +1501,7 @@ public class SBOMApplication implements IApplication {
 						System.out.println(xmlString);
 					}
 					if (xmlOutput != null) {
-						var output = Path.of(xmlOutput);
+						var output = Path.of(xmlOutput).toAbsolutePath();
 						outputs.add(output);
 						Files.writeString(output, xmlString);
 					}
@@ -1611,7 +1611,7 @@ public class SBOMApplication implements IApplication {
 						System.out.println(jsonString);
 					}
 					if (jsonOutput != null) {
-						var output = Path.of(jsonOutput);
+						var output = Path.of(jsonOutput).toAbsolutePath();
 						outputs.add(output);
 						Files.writeString(output, jsonString);
 
@@ -1860,7 +1860,7 @@ public class SBOMApplication implements IApplication {
 
 			try {
 				if (cache != null) {
-					this.cache = Path.of(cache).toRealPath();
+					this.cache = Path.of(cache).toAbsolutePath();
 				} else {
 					this.cache = Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.cache");
 				}
