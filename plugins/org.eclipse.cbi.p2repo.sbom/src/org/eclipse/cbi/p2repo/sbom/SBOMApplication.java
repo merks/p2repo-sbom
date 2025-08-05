@@ -240,9 +240,8 @@ public class SBOMApplication implements IApplication {
 		var html = """
 				<!DOCTYPE html>
 				<html lang=en>
-
 				<head>
-					<title>blah</title>
+					<title>SBOM Index</title>
 					<link rel="icon" type="image/ico" href="https://download.eclipse.org/cbi/sbom/favicon.ico">
 						<style>
 							img {
@@ -251,7 +250,6 @@ public class SBOMApplication implements IApplication {
 
 						</style>
 				</head>
-
 				<body>
 					<table>
 						${items}
@@ -271,7 +269,6 @@ public class SBOMApplication implements IApplication {
 						}
 					</script>
 				</body>
-
 				</html>
 				""";
 
@@ -514,7 +511,7 @@ public class SBOMApplication implements IApplication {
 		}
 
 		private URI toURI(String value) {
-			return value.startsWith("https://") ? URI.create(value) : toURI(Path.of(value));
+			return value.startsWith("https://") ? URI.create(value) : toURI(Path.of(value).toAbsolutePath());
 		}
 
 		private URI toURI(Path path) {
