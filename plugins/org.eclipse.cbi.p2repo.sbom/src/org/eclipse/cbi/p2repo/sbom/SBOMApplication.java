@@ -647,7 +647,6 @@ public class SBOMApplication implements IApplication {
 					var bytes = getArtifactContent(component, artifactDescriptor);
 					setPurl(component, iu, artifactDescriptor, bytes);
 					gatherLicences(component, iu, artifactDescriptor, bytes);
-
 					resolveDependencies(iusToDependencies.get(iu), iu);
 				}));
 			}
@@ -1427,7 +1426,8 @@ public class SBOMApplication implements IApplication {
 			var component = iuComponents.get(iu);
 			var componentBomRef = component.getBomRef();
 
-			for (var requirement : iu.getRequirements()) {
+			var featureGroupIU = featureJarsToFeatures.get(iu);
+			for (var requirement : (featureGroupIU == null ? iu : featureGroupIU).getRequirements()) {
 				if (isExcluded(requirement)) {
 					continue;
 				}
