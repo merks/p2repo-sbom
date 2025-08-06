@@ -184,7 +184,7 @@ public class SBOMApplication implements IApplication {
 	@Override
 	public Object start(IApplicationContext context) throws Exception {
 		var args = getArguments(context);
-		var sbomGenerators = new ArrayList<SBOMGenerator>();
+		var sbomGeneratorResults = new ArrayList<SBOMGenerator.Result>();
 		var installationsFolder = getArgument("-installations", args, null);
 		var verbose = getArgument("-verbose", args);
 		if (installationsFolder != null) {
@@ -211,16 +211,11 @@ public class SBOMApplication implements IApplication {
 						effectiveArgs.add(jsonOutputsFolder + "/"
 								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.json"));
 					}
-
-					var sbomGenerator = new SBOMGenerator(effectiveArgs);
-					sbomGenerator.run(new NullProgressMonitor());
-					sbomGenerators.add(sbomGenerator);
+					sbomGeneratorResults.add(new SBOMGenerator(effectiveArgs).run());
 				}
 			}
 		} else {
-			var sbomGenerator = new SBOMGenerator(args);
-			sbomGenerators.add(sbomGenerator);
-			sbomGenerator.run(new NullProgressMonitor());
+			sbomGeneratorResults.add(new SBOMGenerator(args).run());
 		}
 
 		var index = getArgument("-index", args, null);
@@ -230,13 +225,14 @@ public class SBOMApplication implements IApplication {
 				System.out.println("Generating Index: " + index);
 			}
 			var render = getArgument("-renderer", args, "https://download.eclipse.org/cbi/sbom");
-			generateIndex(indexPath, URI.create(render), sbomGenerators);
+			generateIndex(indexPath, URI.create(render), sbomGeneratorResults);
 		}
 
 		return null;
 	}
 
-	private void generateIndex(Path indexPath, URI renderer, List<SBOMGenerator> sbomGenerators) throws IOException {
+	private void generateIndex(Path indexPath, URI renderer, List<SBOMGenerator.Result> sbomGeneratorResults)
+			throws IOException {
 		var html = """
 				<!DOCTYPE html>
 				<html lang=en>
@@ -274,14 +270,14 @@ public class SBOMApplication implements IApplication {
 
 		html = html.replace("${title}", "SBOM Index");
 		var items = new ArrayList<String>();
-		for (var sbomGenerator : sbomGenerators) {
+		for (var sbomGenerator : sbomGeneratorResults) {
 			var content = new ArrayList<String>();
-			var inputs = sbomGenerator.getInputs();
+			var inputs = sbomGenerator.inputs();
 			var inputLinks = inputs.stream().map(SBOMApplication::toLink)
 					.collect(Collectors.joining("<br/>", "<td>", "</td>"));
 			content.add(inputLinks);
 
-			var outputs = sbomGenerator.getOutputs();
+			var outputs = sbomGenerator.outputs();
 			for (var output : outputs) {
 				var relativize = indexPath.getParent().relativize(output);
 				var label = relativize.toString().endsWith(".json") ? "json" : "xml";
@@ -453,11 +449,11 @@ public class SBOMApplication implements IApplication {
 			xml = getArgument("-xml", args) || !json && xmlOutput == null && jsonOutput == null;
 		}
 
-		public List<Path> getOutputs() {
+		private List<Path> getOutputs() {
 			return outputs;
 		}
 
-		public List<URI> getInputs() {
+		private List<URI> getInputs() {
 			var result = new ArrayList<URI>();
 			if (installationLocation != null) {
 				result.add(getRedirectedURI(installationLocation));
@@ -553,6 +549,11 @@ public class SBOMApplication implements IApplication {
 
 		private void removeRepository(URI uri) {
 			sourceRepositories.removeIf(it -> uri.equals(it.getRepoLocation()));
+		}
+
+		public Result run() throws ProvisionException {
+			run(new NullProgressMonitor());
+			return new Result(this);
 		}
 
 		@Override
@@ -1625,6 +1626,12 @@ public class SBOMApplication implements IApplication {
 				} finally {
 					undoables.forEach(Runnable::run);
 				}
+			}
+		}
+
+		public static record Result(List<URI> inputs, List<Path> outputs) {
+			public Result(SBOMGenerator sbomGenerator) {
+				this(sbomGenerator.getInputs(), sbomGenerator.getOutputs());
 			}
 		}
 	}
