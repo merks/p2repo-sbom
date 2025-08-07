@@ -1,0 +1,371 @@
+// Define global variables
+
+// When the parameters change, this should be increased so that the build does nothing other than update the parameters used for the next build.
+def pipelineVersion = '1'
+
+def  eclipseMilestoneInstaller = [
+  label: 'Eclipse Installer Milestone Repository',
+  BUILD_DESCRIPTION: 'Build the SBOM for the Eclipse Installer Milestone Repository',
+  SCP: "",
+  ARGS: pretty("""
+-input
+https://download.eclipse.org/oomph/products/repository
+-requirement-exclusions
+osgi.arch=ppc64le,osgi.os=linux,osgi.ws=gtk
+-xml-output
+eclipse-installer-repository-sbom.xml
+-json-output
+eclipse-installer-repository-sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def  eclipseMilestoneInstallers  = [
+  label: 'Eclipse Milestone Installers',
+  BUILD_DESCRIPTION: 'Build the SBOMs all for the Eclipse Milestone Installers',
+  SCP: "oomph/products/*.zip oomph/products/*.tar.gz",
+  ARGS: pretty("""
+-redirections
+local-target->https://download.eclipse.org/oomph/products/
+-installations
+local-target
+-xml-outputs
+.
+-json-outputs
+.
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def  eclipse436SDKs  = [
+  label: 'Eclipse 4.37 SDKs',
+  BUILD_DESCRIPTION: 'Build the SBOMs for all the Eclipse 4.36 SDKs',
+  SCP: "eclipse/downloads/drops4/R-4.36-202505281830/eclipse-SDK-*.zip eclipse/downloads/drops4/R-4.36-202505281830/eclipse-SDK-*.tar.gz",
+  ARGS: pretty("""
+-redirections
+local-target->https://download.eclipse.org/eclipse/downloads/drops4/R-4.36-202505281830/
+-installations
+local-target
+-xml-outputs
+.
+-json-outputs
+.
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def  simRel2025_09  = [
+  label: 'SimRel 2025-09 Repository',
+  BUILD_DESCRIPTION: 'Build the SBOMs for the SimRel 2025-09 repository',
+  SCP: "",
+  ARGS: pretty("""
+-input
+https://download.eclipse.org/releases/2025-09
+-requirement-exclusions
+org.eclipse.equinox.p2.install.mode.root=true
+osgi.arch=ppc64,osgi.os=linux
+osgi.os=aix
+osgi.arch=sparc,osgi.os=solaris
+-xml-output
+sbom.xml
+-json-output
+sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def  epp2025_09_M2_products  = [
+  label: 'EPP 2025-09 M2 Products',
+  BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-09 M2 Products.',
+  SCP: "technology/epp/downloads/release/2025-09/M2/*.zip technology/epp/downloads/release/2025-09/M2/*.tar.gz",
+  ARGS: pretty("""
+-redirections
+local-target->https://download.eclipse.org/technology/epp/downloads/release/2025-09/M2/
+-installations
+local-target
+-xml-outputs
+.
+-json-outputs
+.
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def parambuilds = [
+  eclipseMilestoneInstaller,
+  eclipseMilestoneInstallers,
+  eclipse436SDKs,
+  simRel2025_09,
+  epp2025_09_M2_products,
+]
+
+def defaultBuild = eclipseMilestoneInstaller
+
+// Use declarative syntax to run commands inside a Groovy sand-box container.
+pipeline {
+  agent { label 'centos-latest' }
+
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '1'))
+    disableConcurrentBuilds()
+    durabilityHint('MAX_SURVIVABILITY')
+  }
+
+  tools {
+    maven 'apache-maven-latest'
+    jdk 'temurin-jdk21-latest'
+  }
+
+  environment {
+    BUILD_TIME_STAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M').trim()
+    BASE_STORAGE_LOCATION = '/home/data/httpd/download.eclipse.org'
+    PUBLISH_RELATIVE_LOCATION = 'cbi/archive/sboms'
+    PUBLISH_STORAGE_LOCATION = "${env.BASE_STORAGE_LOCATION}/${env.PUBLISH_RELATIVE_LOCATION}"
+    GENIE = 'genie.cbi'
+    SCP_PREFIX = " $GENIE@projects-storage.eclipse.org:$BASE_STORAGE_LOCATION/"
+  }
+
+  parameters {
+    string(
+      name: 'PIPELINE_VERSION',
+      defaultValue: "${pipelineVersion}",
+      description: pretty(
+        '''
+        If the parameter definitions have changed, this version will be out-dated.
+        The script will run but will do nothing other than updating the parameter definitions of the job as a side-effect.
+        '''
+      )
+    )
+
+    string(
+      name: 'BUILD_DESCRIPTION',
+      defaultValue: defaultBuild.BUILD_DESCRIPTION,
+      description: pretty(
+        "Use one of the following links to reconfigure the other parameters below.<br/>${buttons(parambuilds)}"
+      )
+    )
+
+    string(
+      name: 'SBOM_APPLICATION_LOCATION',
+      defaultValue: "https://download.eclipse.org/cbi/updates/p2-sbom/products/nightly/latest",
+      description: (
+        '''
+        The location of org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz.
+        '''
+      )
+    )
+
+    string(
+      name: 'SCP',
+      defaultValue: defaultBuild.SCP,
+      description: (
+        '''
+        The download.eclipse.org relative path arguments for scp -r ${SCP} local-target/ where weach argument will be appropriate prefixed.
+        '''
+      )
+    )
+
+    booleanParam(
+      name: 'USE_CACHE',
+      defaultValue: true,
+      description: 'Whether to use the network cache <a href="lastSuccessfulBuild/artifact/cache.zip">lastSuccessfulBuild/artifact/cache.zip</a> from the most recent build.'
+    )
+
+    text(
+      name: 'ARGS',
+      defaultValue: defaultBuild.ARGS,
+      description: pretty(
+        '''
+        Argments for the org.eclipse.cbi.p2repo.sbom.generator application
+        '''
+      )
+    )
+
+    text(
+      name: 'VM_ARGS',
+      defaultValue: defaultBuild.VM_ARGS,
+      description: pretty(
+        '''
+        VM argments for the org.eclipse.cbi.p2repo.sbom.generator application
+        '''
+      )
+    )
+  }
+
+  stages {
+    stage('Setup Environment') {
+      when {
+        environment name: 'PIPELINE_VERSION', value: pipelineVersion
+        not { environment name: 'BUILD_NUMBER', value: '1' }
+      }
+      steps {
+        script {
+          env.PIPELINE_VERSION = params.PIPELINE_VERSION
+          env.BUILD_DESCRIPTION = params.BUILD_DESCRIPTION
+          env.USE_CACHE = params.USE_CACHE
+          env.SBOM_APPLICATION_LOCATION = params.SBOM_APPLICATION_LOCATION
+          env.ARGS = pretty(params.ARGS)
+          env.ARGS = pretty(params.ARGS)
+          env.SCP = pretty(params.SCP)
+          env.VM_ARGS = pretty(params.VM_ARGS)
+          echo updateBuildDescription()
+        }
+      }
+    }
+
+    stage('SBOM Generator') {
+      when {
+        environment name: 'PIPELINE_VERSION', value: pipelineVersion
+        not { environment name: 'BUILD_NUMBER', value: '1' }
+      }
+      steps {
+        sshagent(['projects-storage.eclipse.org-bot-ssh']) {
+          script {
+            if (!env.SCP.isEmpty()) {
+              env.SCP_ARGS = env.SCP_PREFIX + String.join(env.SCP_PREFIX, env.SCP.split("\\s"))
+              sh '''
+                mkdir local-target
+                scp -r $SCP_ARGS local-target/
+              '''
+            }
+          }
+        }
+
+        sh '''
+          set -x
+          set -o pipefail
+
+          if [[ ${USE_CACHE} == 'true' ]]; then
+            curl --fail-with-body -O ${JOB_URL}$(( BUILD_NUMBER - 1))/artifact/cache.zip && unzip -q cache.zip
+          fi
+          rm -f cache.zip
+          mkdir -p cache
+
+          function createCache {
+            zip -q -r cache.zip cache
+          }
+          trap createCache EXIT
+
+          curl -O ${SBOM_APPLICATION_LOCATION}/org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+          tar -xf org.eclipse.cbi.p2repo.sbom.cli.product-linux.gtk.x86_64.tar.gz
+
+          cbi-sbom/cbi-sbom \
+            -application org.eclipse.cbi.p2repo.sbom.generator \
+            -consoleLog \
+            -noSplash \
+            -verbose \
+            ${ARGS} \
+            -index \
+            index.html \
+            -cache cache \
+            -vmargs \
+            -Dfile.encoding=UTF-8 \
+            ${VM_ARGS}
+        '''
+
+        sshagent(['projects-storage.eclipse.org-bot-ssh']) {
+          sh '''
+            ssh $GENIE@projects-storage.eclipse.org "
+            cd $PUBLISH_STORAGE_LOCATION
+            mkdir -p $JOB_NAME/$BUILD_NUMBER
+            "
+            scp *.html *.xml *.json $GENIE@projects-storage.eclipse.org:$PUBLISH_STORAGE_LOCATION/$JOB_NAME/$BUILD_NUMBER
+          '''
+        }
+
+        script {
+          def description = """
+<a href="https://download.eclipse.org/justj/?file=${env.PUBLISH_RELATIVE_LOCATION}/${env.JOB_NAME}/${env.BUILD_NUMBER}"><img src="https://download.eclipse.org/cbi/sbom/favicon.ico"/> index.html</a>
+""".trim()
+          currentBuild.description += "<br/>" + description.replace("\n", "<br/>")
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+       archiveArtifacts artifacts: '*.xml,*.json, *.html, cache.zip', allowEmptyArchive: true
+    }
+	/*
+    failure {
+      mail to: env.MAIL_TO,
+      subject: "[SBOM Generator] Build Failure ${currentBuild.fullDisplayName}",
+      mimeType: 'text/html',
+      body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
+    }
+
+    fixed {
+      mail to: env.MAIL_TO,
+      subject: "[SBOM Generator] Back to normal ${currentBuild.fullDisplayName}",
+      mimeType: 'text/html',
+      body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>Build URL: <a href='${env.BUILD_URL}'>${env.BUILD_URL}</a>"
+    }
+    */
+    cleanup {
+      deleteDir()
+    }
+  }
+}
+
+def pretty(string) {
+  return string == null ? "" : string.replaceAll("^\r?\n", "").replaceAll("\r?\n\$", "").replace("\r", "").stripIndent()
+}
+
+def buttons(list) {
+  // Styling links as buttons.
+  //
+  def buttonStyle = '''
+     margin-left: 2em;
+     margin-top: 1ex;
+     margin-bottom: 1ex;
+     font-weight: bold;
+     border: 1px solid Chocolate;
+     background-color: DarkOrange;
+     color: white;
+     padding: 0.25ex 0.25em;
+     text-align: center;
+     text-decoration: none;
+     display: inline-block;
+   '''.replaceAll("\\s+", " ").trim()
+
+  def result = ""
+  list.each {
+    result +=  "\n<a href='parambuild?${parambuild(it)}' style='${buttonStyle}'>${it.label}</a>"
+  }
+  return result
+}
+
+def parambuild(arguments) {
+  def result = ""
+  arguments.each { entry ->
+    // Ignore lower case entries
+    if (entry.key.matches("[A-Z0-9_]+")) {
+      if (!result.isEmpty()) {
+        result += "&"
+      }
+      result += entry.key
+      result += "="
+      result += encode(entry.value);
+    }
+  }
+  return result
+}
+
+def encode(string) {
+  return string.replace("\r", "").replaceAll("^\n", "").replaceAll("\\s+\$", "").stripIndent().replace("\r", "").replace("%", "%25").replace("&", "%26").replace("\n", "%0A").replace("+", "%2B").replace(" ", "+")
+}
+
+def updateBuildDescription() {
+  def description = """
+BUILD_DESCRIPTION=${params.BUILD_DESCRIPTION}
+USE_CACHE=${params.USE_CACHE}
+""".trim()
+  currentBuild.description = description.replace("\n", "<br/>")
+  return description
+}
