@@ -18,10 +18,12 @@ import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createBomXMLGe
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.createProperty;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.BOMUtil.urlEncodeQueryParameter;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.IOUtil.extractInstallation;
+import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.URIUtil.toURI;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.evaluate;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.getText;
 import static org.eclipse.cbi.p2repo.sbom.SBOMApplication.XMLUtil.newDocumentBuilder;
 
+import java.awt.Desktop;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -159,6 +161,8 @@ public class SBOMApplication implements IApplication {
 		return result;
 	};
 
+	private static final URI SBOM_RENDERER_URI = URI.create("https://download.eclipse.org/cbi/sbom");
+
 	private static final Pattern MAVEN_POM_PATTERN = Pattern.compile("META-INF/maven/[^/]+/[^/]+/pom.xml");
 
 	private static final Pattern META_INF_FILE_PATTERN = Pattern.compile("META-INF/[^/]+");
@@ -215,7 +219,11 @@ public class SBOMApplication implements IApplication {
 				}
 			}
 		} else {
-			sbomGeneratorResults.add(new SBOMGenerator(args).run());
+			var effectiveArgs = new ArrayList<>(args);
+			if (verbose) {
+				effectiveArgs.add(0, "-verbose");
+			}
+			sbomGeneratorResults.add(new SBOMGenerator(effectiveArgs).run());
 		}
 
 		var index = getArgument("-index", args, null);
@@ -224,8 +232,14 @@ public class SBOMApplication implements IApplication {
 			if (verbose) {
 				System.out.println("Generating Index: " + index);
 			}
-			var render = getArgument("-renderer", args, "https://download.eclipse.org/cbi/sbom");
+			var render = getArgument("-renderer", args, SBOM_RENDERER_URI.toString());
 			generateIndex(indexPath, URI.create(render), sbomGeneratorResults);
+
+			var previewRedirections = URIUtil.parseRedirections(getArguments("-preview", args, List.of()));
+			var redirectedIndex = URIUtil.getRedirectedURI(toURI(indexPath), previewRedirections);
+			if (!"file".equals(redirectedIndex.getScheme())) {
+				URIUtil.openURL(redirectedIndex);
+			}
 		}
 
 		return null;
@@ -282,8 +296,8 @@ public class SBOMApplication implements IApplication {
 				var relativize = indexPath.getParent().relativize(output);
 				var label = relativize.toString().endsWith(".json") ? "json" : "xml";
 				var hrefs = """
-						<td><a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=white&labelColor=darkorange&color=gray"/></a></td>
-						<td><a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=white&labelColor=darkorange&color=gray"/></a></td>
+						<td><a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a></td>
+						                  <td><a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a></td>
 						""";
 				hrefs = hrefs.replace("${renderer}", renderer.toString()).replace("${file}", relativize.toString())
 						.replace("${label}", label);
@@ -380,11 +394,7 @@ public class SBOMApplication implements IApplication {
 
 		private final List<IInstallableUnit> exclusiveContextIUs = new ArrayList<>();
 
-		private final Map<URI, URI> uriRedirections = new TreeMap<>((o1, o2) -> {
-			// Longest URI first for redirection.
-			var result = Integer.compare(o2.toString().length(), o1.toString().length());
-			return result == 0 ? o1.compareTo(o2) : result;
-		});
+		private final Map<URI, URI> uriRedirections;
 
 		private final List<Path> outputs = new ArrayList<>();
 
@@ -414,13 +424,7 @@ public class SBOMApplication implements IApplication {
 
 			verbose = getArgument("-verbose", args);
 
-			for (var uriRedirection : getArguments("-redirections", args, List.of())) {
-				var pair = uriRedirection.split("->");
-				if (pair.length != 2) {
-					throw new IllegalArgumentException("Expected a '->' in the redirection:" + uriRedirection);
-				}
-				uriRedirections.put(toURI(pair[0]), toURI(pair[1]));
-			}
+			uriRedirections = URIUtil.parseRedirections(getArguments("-redirections", args, List.of()));
 
 			var installation = getArgument("-installation", args, null);
 			if (installation != null) {
@@ -504,18 +508,6 @@ public class SBOMApplication implements IApplication {
 				return extractedInstallation;
 			}
 			return installationPath;
-		}
-
-		private URI toURI(String value) {
-			return value.startsWith("https://") ? URI.create(value) : toURI(Path.of(value).toAbsolutePath());
-		}
-
-		private URI toURI(Path path) {
-			return toURI(path.toUri());
-		}
-
-		private URI toURI(URI uri) {
-			return URI.create(uri.toString().replaceAll("file:///", "file:/").replaceAll("/$", "")).normalize();
 		}
 
 		// Ensure that nothing leaks from previous calls or from some internal defaults.
@@ -1006,13 +998,7 @@ public class SBOMApplication implements IApplication {
 		}
 
 		private URI getRedirectedURI(URI location) {
-			for (var entry : uriRedirections.entrySet()) {
-				var relativizedURI = entry.getKey().relativize(location);
-				if (relativizedURI.getScheme() == null) {
-					return URI.create(entry.getValue().toString() + relativizedURI);
-				}
-			}
-			return location;
+			return URIUtil.getRedirectedURI(location, uriRedirections);
 		}
 
 		private void getClearlyDefinedProperty(Component component, MavenDescriptor mavenDescriptor) {
@@ -2247,6 +2233,53 @@ public class SBOMApplication implements IApplication {
 					}
 				}
 			}
+		}
+	}
+
+	public static class URIUtil {
+		public static void openURL(URI uri) throws IOException {
+			Desktop.getDesktop().browse(uri);
+		}
+
+		public static URI toURI(String value) {
+			return value.startsWith("https://") | value.startsWith("http://") ? URI.create(value)
+					: toURI(Path.of(value).toAbsolutePath());
+		}
+
+		public static URI toURI(Path path) {
+			return toURI(path.toUri());
+		}
+
+		public static URI toURI(URI uri) {
+			return URI.create(uri.toString().replaceAll("file:///", "file:/").replaceAll("/$", "")).normalize();
+		}
+
+		public static URI getRedirectedURI(URI location, Map<URI, URI> uriRedirections) {
+			for (var entry : uriRedirections.entrySet()) {
+				var relativizedURI = entry.getKey().relativize(location);
+				if (relativizedURI.getScheme() == null) {
+					return getRedirectedURI(URI.create(entry.getValue().toString() + relativizedURI), uriRedirections);
+				}
+			}
+			return location;
+		}
+
+		public static Map<URI, URI> parseRedirections(List<String> redirections) {
+			var uriRedirections = new TreeMap<URI, URI>((o1, o2) -> {
+				// Longest URI first for redirection.
+				var result = Integer.compare(o2.toString().length(), o1.toString().length());
+				return result == 0 ? o1.compareTo(o2) : result;
+			});
+
+			for (var uriRedirection : redirections) {
+				var pair = uriRedirection.split("->");
+				if (pair.length != 2) {
+					throw new IllegalArgumentException("Expected a '->' in the redirection:" + uriRedirection);
+				}
+				uriRedirections.put(toURI(pair[0]), toURI(pair[1]));
+			}
+
+			return uriRedirections;
 		}
 	}
 }

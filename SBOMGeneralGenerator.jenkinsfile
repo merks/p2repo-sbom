@@ -40,12 +40,47 @@ local-target
 ]
 
 def  eclipse436SDKs  = [
-  label: 'Eclipse 4.37 SDKs',
+  label: 'Eclipse 4.36 SDKs',
   BUILD_DESCRIPTION: 'Build the SBOMs for all the Eclipse 4.36 SDKs',
   SCP: "eclipse/downloads/drops4/R-4.36-202505281830/eclipse-SDK-*.zip eclipse/downloads/drops4/R-4.36-202505281830/eclipse-SDK-*.tar.gz",
   ARGS: pretty("""
 -redirections
 local-target->https://download.eclipse.org/eclipse/downloads/drops4/R-4.36-202505281830/
+-installations
+local-target
+-xml-outputs
+.
+-json-outputs
+.
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def  eclipse437SDK  = [
+  label: 'Eclipse 4.37 SDK Repository',
+  BUILD_DESCRIPTION: 'Build the SBOM for all the Eclipse 4.37 SDK Repository',
+  SCP: "",
+  ARGS: pretty("""
+-input
+https://download.eclipse.org/eclipse/updates/4.37-I-builds/I20250828-0630
+-xml-output
+sbom.xml
+-json-output
+sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+
+def  eclipse437SDKs  = [
+  label: 'Eclipse 4.37 SDKs',
+  BUILD_DESCRIPTION: 'Build the SBOMs for all the Eclipse 4.37 SDKs',
+  SCP: "eclipse/downloads/drops4/I20250828-0630/eclipse-SDK-*.zip eclipse/downloads/drops4/I20250828-0630/eclipse-SDK-*.tar.gz",
+  ARGS: pretty("""
+-redirections
+local-target->https://download.eclipse.org/eclipse/downloads/drops4/I20250828-0630/
 -installations
 local-target
 -xml-outputs
@@ -78,13 +113,13 @@ sbom.json
 """),
 ]
 
-def  epp2025_09_M2_products  = [
-  label: 'EPP 2025-09 M2 Products',
-  BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-09 M2 Products.',
-  SCP: "technology/epp/downloads/release/2025-09/M2/*.zip technology/epp/downloads/release/2025-09/M2/*.tar.gz",
+def  epp2025_09_RC1_products  = [
+  label: 'EPP 2025-09 RC1 Products',
+  BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-09 RC1 Products.',
+  SCP: "technology/epp/downloads/release/2025-09/RC1/*.zip technology/epp/downloads/release/2025-09/RC1/*.tar.gz",
   ARGS: pretty("""
 -redirections
-local-target->https://download.eclipse.org/technology/epp/downloads/release/2025-09/M2/
+local-target->https://download.eclipse.org/technology/epp/downloads/release/2025-09/RC1/
 -installations
 local-target
 -xml-outputs
@@ -100,8 +135,10 @@ def parambuilds = [
   eclipseMilestoneInstaller,
   eclipseMilestoneInstallers,
   eclipse436SDKs,
+  eclipse437SDK,
+  eclipse437SDKs,
   simRel2025_09,
-  epp2025_09_M2_products,
+  epp2025_09_RC1_products,
 ]
 
 def defaultBuild = eclipseMilestoneInstaller

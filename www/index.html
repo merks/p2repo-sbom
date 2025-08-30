@@ -3,11 +3,11 @@
 
 <head>
 	<title>SBOM | Eclipse Foundation</title>
-	<meta name="keywords" content="eclipse,sbom" />
-	<link rel="icon" type="image/ico" href="favicon.ico" />
+	<meta name="keywords" content="eclipse,sbom">
+	<link rel="icon" type="image/ico" href="favicon.ico">
 	<!--
-	<link rel="preconnect stylesheet" href="../project.css" />
-	<script src="../project.js"></script>
+	<link rel="preconnect stylesheet" href="../project.css">
+	<script src="../project.js"></script
 	<script src="project.js"></script>
 	-->
 	<style>
@@ -33,6 +33,10 @@
 			margin-top: 0.2em;
 			margin-bottom: 0.2em;
 			border: 1px solid lightgray;
+		}
+
+		img[alt='help'] {
+			margin-left: 0.5em;
 		}
 
 		.input-section {
@@ -65,19 +69,35 @@
 			height: 1px;
 		}
 
+		code {
+			background-color: rgba(0, 0, 0, 0.1);
+			border-radius: 0;
+			color: #bf637b;
+		}
+
 		.action {
 			color: #f7941e;
-			background-color: white;
+			background-color: inherit;
 			font-weight: bolder;
 			cursor: pointer;
 		}
 
+		.toggle-sample,
 		.toggle {
 			color: #f7941e;
-			background-color: white;
-			/* margin-left: 1em; */
+			background-color: inherit;
 			border: none;
 			padding: 0px 0px
+		}
+
+		.help-nav {
+			font-weight: bold;
+			font-size: 150%;
+			text-align: center;
+		}
+
+		#search-error {
+			color: crimson;
 		}
 
 		.incoming-dependency,
@@ -314,6 +334,73 @@
 			width: 40px;
 		}
 
+		.modal-popup {
+			display: none;
+			position: fixed;
+			z-index: 1;
+			padding-top: 50px;
+			padding-bottom: 30px;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100vh;
+			background-color: rgba(0, 0, 0, 0.7);
+		}
+
+		.modal-popup-description {
+			display: none;
+			overflow: auto;
+			margin: auto;
+			width: 80%;
+			max-width: 900px;
+			font-size: 120%;
+			color: white;
+			padding: 10px 0;
+			height: 70vh;
+		}
+
+		.modal-popup-description a {
+			color: plum;
+		}
+
+		.modal-popup-description {
+			animation-name: zoom;
+			animation-duration: 0.6s;
+		}
+
+		@keyframes zoom {
+			from {
+				transform: scale(0)
+			}
+
+			to {
+				transform: scale(1)
+			}
+		}
+
+		.modal-popup-close {
+			position: absolute;
+			top: 15px;
+			right: 35px;
+			color: #f1f1f1;
+			font-size: 40px;
+			font-weight: bold;
+			transition: 0.3s;
+		}
+
+		.modal-popup-close:hover,
+		.modal-popup-close:focus {
+			color: #bbb;
+			text-decoration: none;
+			cursor: pointer;
+		}
+
+		@media only screen and (max-width: 900px) {
+			modal-content {
+				width: 100%;
+			}
+		}
+
 		/*]]>*/
 	</style>
 	<script>
@@ -382,13 +469,17 @@
 		}
 
 		function generateShowFieldsButton() {
-			return `<span class="action" onclick="toggleFields(this)">${showing}</span>`;
+			return `<span class="action" title="Hide/Show Fields" onclick="toggleFields(this)">${showing}</span>`;
 		}
 
 		function toggleFields(button) {
 			const newState = button.innerText == showing ? hidden : showing;
 			button.innerText = newState;
 			document.getElementById('filters-form').style.display = button.innerText == showing ? 'block' : 'none';
+		}
+
+		function generateSampleButton(value) {
+			return `<button class="toggle-sample">${value}</button>`;
 		}
 
 		function generateButton(all) {
@@ -473,7 +564,7 @@
 				}
 				const type = params.get('type')
 				url += '.' + (type == null ? 'jar' : type);
-				return `<a href="${url}"><img src="download.svg"/></a>`;
+				return `<a href="${url}"><img src="download.svg"></a>`;
 			} else if (scheme == 'p2') {
 				let url = params.get('location');
 				p2Repositories.add(url);
@@ -486,7 +577,7 @@
 					url += '/binary/' + name + '_' + version;
 				} else if (classifier == 'metadata') {
 				}
-				return `<a href="${url}"><img src="download.svg"/></a>`;
+				return `<a href="${url}"><img src="download.svg"></a>`;
 			}
 			return '';
 		}
@@ -540,7 +631,7 @@ ${artifactURL}`;
 			if (pedigree != null) {
 				const ancestors = getModelValue(pedigree, 'ancestors', []);
 				return ancestors.map(ancestor => `<div class="ancestor" style="display:none">
-<img class="icon" src="ancestor.svg"/>
+<img class="icon" src="ancestor.svg">
 ${getAncestorElementDetail(ancestor)}
 				</div > `);
 			}
@@ -556,7 +647,7 @@ ${getAncestorElementDetail(ancestor)}
 			const references = getModelValue(component, 'externalReferences', []);
 			if (references != null) {
 				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style="display:none">
-					<img class="icon" src="reference.svg" />
+					<img class="icon" src="reference.svg">
 ${getReferenceElementDetail(reference)}
 </div > `);
 			}
@@ -568,8 +659,6 @@ ${getReferenceElementDetail(reference)}
 			componentExternalReferenceTypes.add(type);
 			const url = getModelValue(reference, 'url');
 			let actualURL = type == 'vcs' && url != null > 0 ? extraSCMURL(url) : url;
-			// https://github.com/eclipse-platform/eclipse.platform.git?path=ant/org.eclipse.ant.core&tag=I20250304-0640&commitId=f928ecce547595cd272cb5ef6b5fabd58223e17d
-			// /https:\/\/github.com\/([^/]+)\/([^/]+)/.exec(actualURL);
 			if (actualURL.startsWith('https://github.com/') && actualURL.indexOf('?') != -1) {
 				const gitHubURL = new URL(actualURL);
 				const commitId = gitHubURL.searchParams.get('commitId');
@@ -619,12 +708,12 @@ ${getReferenceElementDetail(reference)}
 			const publisher = getModelValue(component, 'publisher');
 			const description = getModelValue(component, 'description');
 			if (publisher != null || description != null) {
-				const publisherDetail = publisher == null ? '' : `<span class="detail-provider">Provider: ${publisher}</span><hr/>`;
+				const publisherDetail = publisher == null ? '' : `<span class="detail-provider">Provider: ${publisher}</span><hr>`;
 				return [`<div class="detail" style="display:none">
-<img class="icon" src="detail.svg"/>
+<img class="icon" src="detail.svg">
 <span class="detail-description">
 ${publisherDetail}
-${description.replace(' - \u200B', '<hr/>')}
+${description.replace(' - \u200B', '<hr>')}
 </span>
 </div>`];
 			}
@@ -635,7 +724,7 @@ ${description.replace(' - \u200B', '<hr/>')}
 			const properties = getModelValue(component, 'properties');
 			if (properties != null) {
 				return properties.map(property => `<div class="property property-${getClassName(getModelValue(property, 'name'))}" style="display:none">
-<img class="icon" src="property.svg"/>
+<img class="icon" src="property.svg">
 ${getPropertyElementDetail(property)}
 </div>`);
 			}
@@ -679,7 +768,7 @@ ${getPropertyElementDetail(property)}
 					return `<span title="${content}" onclick="copyToClipboard(this.title)")>${alg}</span>`
 				});
 				return [`<div class="hash" style="display:none">
-<img class="icon" src="hash.svg"/>
+<img class="icon" src="hash.svg">
 ${details.join('\n')}
 </div>` ];
 			}
@@ -690,7 +779,7 @@ ${details.join('\n')}
 			const licenses = getModelValue(component, 'licenses');
 			if (licenses != null) {
 				return licenses.map(license => `<div class="license" style="display:none">
-<img class="icon" src="license.svg"/>
+<img class="icon" src="license.svg">
 ${getLicenseElementDetail(license)}
 </div>`);
 			}
@@ -752,7 +841,7 @@ ${getLicenseElementDetail(license)}
 		}
 
 		function getIcon(svg) {
-			return `<img class="icon" src="${svg}" alt="${svg}"/>`;
+			return `<img class="icon" src="${svg}" alt="${svg}">`;
 		}
 
 		function getComponentClassifier(component) {
@@ -886,12 +975,6 @@ ${getLicenseElementDetail(license)}
 				event.preventDefault();
 			});
 
-			const labels = document.querySelectorAll('#filters label');
-			for (const label of labels) {
-				const element = document.getElementById(label.getAttribute('for'));
-				label.ondblclick = element.ondblclick;
-			}
-
 			const search = document.getElementById('search');
 			search.addEventListener('keyup', event => {
 				if (event.key == 'Enter') {
@@ -903,22 +986,99 @@ ${getLicenseElementDetail(license)}
 			if (file != null) {
 				generateContent(file);
 			}
+
+			const copyTargets = document.querySelectorAll('p[data-copy]');
+			for (const copyTarget of copyTargets) {
+				const copyID = copyTarget.getAttribute('data-copy');
+				const element = document.getElementById(copyID);
+				copyTarget.append(...element.cloneNode(true).childNodes);
+			}
+
+			const generateTargets = document.querySelectorAll('*[data-generate]');
+			for (const generateTarget of generateTargets) {
+				const value = eval(generateTarget.getAttribute('data-generate'));
+				generateTarget.innerHTML = value;
+			}
+
+			const helpSections = [...document.querySelectorAll('div[id^="help-"]')];
+			for (let i = 0; i < helpSections.length; i++) {
+				const helpSection = helpSections[i];
+				const currentId = helpSection.id;
+				const previousId = i == 0 ? null : helpSections[i - 1].id;
+				const nextId = i == helpSections.length - 1 ? null : helpSections[i + 1].id;
+				helpSection.append(...toElements(`<div class="help-nav">
+${`<span style="opacity: ${previousId == null ? 0.25 : 1.0};" class="action" onclick="helpNav('${currentId}', '${previousId}')" title="Previous">&larr;</span>`}
+<span ondblclick="helpNavAll(event)" style="font-size: 50%; vertical-align: middle;">|</span>
+${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick="helpNav('${currentId}', '${nextId}')" title="Next">&rarr;</span>`}
+</div>`));
+			}
+		}
+
+		var deferedClick;
+		var clickCount = 0;
+		var doubleClickTimeout = 500;
+
+		function clickOrDoubleClick(handleClick, handleDoubleClick) {
+			clickCount++;
+			clearTimeout(deferedClick)
+			if (clickCount >= 2) {
+				setTimeout(() => {
+					handleDoubleClick();
+				}, 1);
+				clickCount = 0;
+			} else {
+				deferedClick = setTimeout(() => {
+					handleClick();
+					clickCount = 0;
+				}, doubleClickTimeout);
+			}
+		}
+
+		function filterClick(event, element) {
+			event.preventDefault();
+			clickOrDoubleClick(() => {
+				element.checked = !element.checked;
+				filter();
+			}, () => {
+				element.checked = !element.checked;
+				doubleClick(element);
+			});
 		}
 
 		function doubleClick(element) {
 			window.getSelection().empty();
 			const elementFilter = element.tagName.toLowerCase() == 'label' ? document.getElementById(element.getAttribute('for')) : element;
-			const enableAll = !elementFilter.checked;
 
 			const type = elementFilter.classList.contains('subfilter') ? '.subfilter' : '.filter';
+
+			var allOthersUnchecked = true;
 			const filters = element.parentElement.querySelectorAll(type);
 			for (const otherFilter of filters) {
-				if (enableAll) {
-					otherFilter.checked = true
-				} else {
-					otherFilter.checked = otherFilter == elementFilter;
+				if (otherFilter != element && otherFilter.checked) {
+					allOthersUnchecked = false;
+					break;
 				}
 			}
+
+			if (allOthersUnchecked) {
+				if (!element.checked) {
+					for (const otherFilter of filters) {
+						otherFilter.checked = true;
+					}
+				} else {
+					element.checked = true;
+				}
+			} else {
+				for (const otherFilter of filters) {
+					if (otherFilter == element) {
+						element.checked = true;
+					}
+					else {
+						otherFilter.checked = false;
+					}
+				}
+			}
+
 			filter();
 		}
 
@@ -991,7 +1151,23 @@ ${getLicenseElementDetail(license)}
 			}
 
 			const search = document.getElementById('search');
-			const pattern = search.value;
+			const searchError = document.getElementById('search-error');
+			searchError.innerText = '';
+			let pattern = null;
+			try {
+				const searchValue = search.value;
+				const regexValue = /^\/(.*?)\/?$/.exec(searchValue);
+				if (regexValue != null) {
+					pattern = new RegExp(regexValue[1]);
+				} else {
+					pattern = new RegExp(RegExp.escape(searchValue));
+				}
+			}
+			catch (err) {
+				const searchError = document.getElementById('search-error');
+				searchError.innerText = err.message
+				pattern = /.*/;
+			}
 
 			let visibleWithChildren = 0;
 			let visibleWithoutChildren = 0;
@@ -1004,7 +1180,7 @@ ${getLicenseElementDetail(license)}
 					toggle.style.opacity = opacity;
 
 					const label = parent.querySelector('.label-name').textContent;
-					const searchMatch = label.indexOf(pattern) != -1;
+					const searchMatch = pattern.test(label);
 
 					const hidden = !searchMatch || (show == 'show-with-children' && opacity == 0 || show == 'show-without-children' && opacity == 1);
 					if (!isFiltered(parent)) {
@@ -1079,6 +1255,7 @@ ${getLicenseElementDetail(license)}
 	<div id="busy-indicator" style="display: none">
 		<div class="loader"></div>
 	</div>
+	<img onclick="popup(\'help-control\')" alt="help" src="help.svg">
 </div>
 `));
 			setBusy(true);
@@ -1098,23 +1275,6 @@ ${getLicenseElementDetail(license)}
 					const urlInput = form['sbom-url'];
 					setInputURL(urlInput.value);
 				} else {
-					if (false) {
-						(async () => {
-							const fileContent = await xxxxxx.text();
-							console.log('.text()', fileContent);
-
-							const fileContentStream = await file.stream();
-							console.log('.stream()', await streamToText(fileContentStream));
-
-							// const buffer = await file.arrayBuffer();
-							// console.log('.buffer()', bufferToText(buffer));
-
-							// const fileSliceBlob = file.slice(0, file.length);
-							// const fileSliceBlobStream = await fileSliceBlob.stream();
-							// console.log('.slice() and .stream()', await streamToText(fileSliceBlobStream));
-						})();
-					}
-
 					const sbomInput = form['sbom-input'].value.trim();
 					setInput(sbomInput);
 				}
@@ -1180,7 +1340,6 @@ ${getLicenseElementDetail(license)}
 				} else if (name != 'bom') {
 					throw `Expecting a root element named sbom not ${name}`;
 				}
-				// target.innerText = sbom.documentElement.outerHTML;
 				buildModel(sbom.documentElement);
 			} else {
 				const sbom = JSON.parse(sbomInput);
@@ -1234,7 +1393,8 @@ ${componentElements.join('\n')}
 			).toArray();
 
 			summary.innerHTML += properties.join('<span class="bom-property-punctuation">,</span> ') + `
-<hr/>
+<img onclick="popup(\'help-root\')" alt="help" src="help.svg">
+<hr>
 <div>
 	${generateRepositories(p2Repositories, 'p2')}
 	${generateRepositories(mavenRepositories, 'maven')}
@@ -1256,20 +1416,15 @@ ${componentElements.join('\n')}
 
 		function generatNestedFilters(keys, type) {
 			const fieldset = document.getElementById(`${type}-filters`)
+			const innerHTML = fieldset.innerHTML
 			fieldset.innerHTML =
 				[...keys].sort().map(name => `
-<input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filter()" ondblclick="doubleClick(this)" checked />
+<input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filterClick(event, this)" checked>
 <label for="${type}-${getClassName(name)}">${name}<span class="count"></span></label>
-` ).join('\n');
+` ).join('\n') + innerHTML;
 
 			const total = document.querySelector(`label[for=${type}] span[data-total]`);
 			total.setAttribute('data-total', [...keys].map(key => `${type}-${getClassName(key)}`).join(' '));
-
-			const labels = fieldset.querySelectorAll('label');
-			for (const label of labels) {
-				const element = document.getElementById(label.getAttribute('for'));
-				label.ondblclick = element.ondblclick;
-			}
 		}
 
 		function scrollToTop() {
@@ -1286,6 +1441,51 @@ ${componentElements.join('\n')}
 					const height = fieldSet.clientHeight;
 					window.scrollBy(0, -height - 2);
 				}
+			}
+		}
+
+		function popup(id) {
+			const popup = document.getElementById('popup');
+			popup.style.display = 'block';
+
+			const content = document.getElementById(id);
+			content.style.display = 'block';
+
+			const closeButton = document.getElementsByClassName('modal-popup-close')[0];
+
+			const escapeListener = event => {
+				if (event.key == 'Escape') {
+					closeButton.onclick();
+				}
+			}
+
+			window.document.addEventListener('keyup', escapeListener);
+
+			closeButton.onclick = () => {
+				popup.style.display = 'none';
+				window.removeEventListener('keyup', escapeListener);
+				for (helpSection of document.querySelectorAll('div[id^="help-"]')) {
+					helpSection.style.display = 'none';
+				}
+			}
+		}
+
+		function helpNavAll() {
+			const popup = document.getElementById('popup');
+			popup.style.overflow = 'auto';
+			for (helpSection of document.querySelectorAll('div[id^="help-"]')) {
+				helpSection.style.display = 'block';
+				helpSection.style.overflow = 'inherit';
+				helpSection.style.height = 'auto';
+			}
+		}
+
+		function helpNav(currentId, targetId) {
+			const currentContent = document.getElementById(currentId);
+			const targetContent = document.getElementById(targetId);
+			if (targetContent != null) {
+				currentContent.style.display = 'none';
+				targetContent.style.display = 'block';
 			}
 		}
 
@@ -1307,18 +1507,18 @@ ${componentElements.join('\n')}
 	<main>
 		<fieldset id="inputs">
 			<form id="form">
-				<input class="input-type" type="radio" id="input-text" name="input" onclick="changeInputType()" checked />
+				<input class="input-type" type="radio" id="input-text" name="input" onclick="changeInputType()" checked>
 				<label for="input-text">SBOM Text</label>
 
-				<input class="input-type" type="radio" id="input-file" name="input" onclick="changeInputType()" />
+				<input class="input-type" type="radio" id="input-file" name="input" onclick="changeInputType()">
 				<label for="input-file">SBOM File</label>
 
-				<input class="input-type" type="radio" id="input-url" name="input" onclick="changeInputType()" />
+				<input class="input-type" type="radio" id="input-url" name="input" onclick="changeInputType()">
 				<label for="input-url">SBOM URL</label>
 
 				<div class="input-section" id="input-text-section">
 					<!--
-				<label for="sbom-input">Enter SBOM Text</label><br />
+				<label for="sbom-input">Enter SBOM Text</label><br>
 				-->
 					<textarea id="sbom-input" name="sbom-input" rows="8" cols="150"></textarea>
 				</div>
@@ -1340,98 +1540,429 @@ ${componentElements.join('\n')}
 			</form>
 		</fieldset>
 
-		<!--
-		&#x25B7;
-		&#x25E2;
-		-->
-
 		<fieldset id="filters">
 			<form id="filters-form">
 				<div>
-					<input class="filter" type="checkbox" id="binary" name="binary" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="binary"><img src="binary.svg" /> Binary<span class="count"></span></span></label>
+					<input class="filter" type="checkbox" id="binary" name="binary" onclick="filterClick(event, this)" checked>
+					<label for="binary"><img alt="" src="binary.svg"> Binary<span class="count"></span></label>
 
-					<input class="filter" type="checkbox" id="bundle" name="bundle" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="bundle"><img src="bundle.svg" /> Bundle<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="bundle" name="bundle" onclick="filterClick(event, this)" checked>
+					<label for="bundle"><img alt="" src="bundle.svg"> Bundle<span class="count"></span></label>
 
-					<input class="filter" type="checkbox" id="feature" name="feature" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="feature"><img src="feature.svg" /> Feature<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="feature" name="feature" onclick="filterClick(event, this)" checked>
+					<label for="feature"><img alt="" src="feature.svg"> Feature<span class="count"></span></label>
 
-					<input class="filter" type="checkbox" id="metadata" name="metadata" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="metadata"><img src="metadata.svg" /> Metadata<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="metadata" name="metadata" onclick="filterClick(event, this)" checked>
+					<label for="metadata"><img alt="" src="metadata.svg"> Metadata<span class="count"></span></label>
 
 					<span style="display: none">&nbsp;&nbsp;&Sigma;<span class="count" data-total='binary bundle feature metadata'></span></span>
+
+					<img onclick="popup('help-unit')" alt="help" src="help.svg">
 				</div>
 
-				<br />
+				<br>
 
 				<div>
-					<img src="filter.svg" /> <input class="xsearch" type="search" placeholder=".*" id="search" name="xshow" xonclick="filter()" size="50" />
+					<img alt="" src="filter.svg"> <input type="search" placeholder="/.*/" id="search" name="name" size="50">
+					<span id="search-error"></span>
+					<img onclick="popup('help-name')" alt="help" src="help.svg">
 				</div>
 
-				<br />
+				<br>
 
 				<div>
-					<input class="filter" type="radio" id="show-all" name="show" onclick="filter()" checked />
+					<input class="filter" type="radio" id="show-all" name="show" onclick="filter()" checked>
 					<label for="show-all">All<span class="count"></span></label>
 
-					<input class="filter" type="radio" id="show-with-children" name="show" onclick="filter()" />
+					<input class="filter" type="radio" id="show-with-children" name="show" onclick="filter()">
 					<label for="show-with-children">With Children<span class="count"></span></label>
 
-					<input class="filter" type="radio" id="show-without-children" name="show" onclick="filter()" />
+					<input class="filter" type="radio" id="show-without-children" name="show" onclick="filter()">
 					<label for="show-without-children">Without Children<span class="count"></span></label>
-					<br />
+
+					<img onclick="popup('help-children')" alt="help" src="help.svg">
+					<br>
 				</div>
 
-				<hr />
+				<hr>
 
 				<div>
-					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="purl"><img src="purl.svg" /> PURLs<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filterClick(event, this)" checked>
+					<label for="purl"><img alt="" src="purl.svg"> PURLs<span class="count"></span></label>
+					<img onclick="popup('help-purl')" alt="help" src="help.svg">
 
-					<br />
+					<br>
 
-					<input class="filter" type="checkbox" id="ancestor" name="purl" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="ancestor"><img src="ancestor.svg" /> Predigree<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="ancestor" name="purl" onclick="filterClick(event, this)" checked>
+					<label for="ancestor"><img alt="" src="ancestor.svg"> Predigree<span class="count"></span></label>
+					<img onclick="popup('help-pedigree')" alt="help" src="help.svg">
 
-					<br />
+					<br>
 
-					<input class="filter" type="checkbox" id="hash" name="hash" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="hash"><img src="hash.svg" /> Hash Sums<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="hash" name="hash" onclick="filterClick(event, this)" checked>
+					<label for="hash"><img alt="" src="hash.svg"> Hash Sums<span class="count"></span></label>
+					<img onclick="popup('help-hashsum')" alt="help" src="help.svg">
+					<br>
 
-					<br />
+					<input class="filter" type="checkbox" id="license" name="license" onclick="filterClick(event, this)" checked>
+					<label for="license"><img alt="" src="license.svg"> Licenses<span class="count"></span></label>
+					<img onclick="popup('help-license')" alt="help" src="help.svg">
 
-					<input class="filter" type="checkbox" id="license" name="license" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="license"><img src="license.svg" /> Licenses<span class="count"></span></label>
+					<br>
 
-					<br />
+					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filterClick(event, this)" checked>
+					<label for="detail"><img alt="" src="detail.svg"> Details<span class="count"></span></label>
+					<img onclick="popup('help-detail')" alt="help" src="help.svg">
 
-					<input class="filter" type="checkbox" id="detail" name="detail" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="detail"><img src="detail.svg" /> Details<span class="count"></span></label>
+					<br>
 
-					<br />
-
-					<input class="filter" type="checkbox" id="property" name="property" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="property"><img src="property.svg" /> Properties<span class="count" data-total='*'></span></label>
+					<input class="filter" type="checkbox" id="property" name="property" onclick="filterClick(event, this)" checked>
+					<label for="property"><img alt="" src="property.svg"> Properties<span class="count" data-total='*'></span></label>
+					<img onclick="popup('help-property')" alt="help" src="help.svg">
 					<fieldset class="nested-filters" id="property-filters">
+						<img onclick="popup('help-property-filter')" alt="help" src="help.svg">
 					</fieldset>
 
-					<input class="filter" type="checkbox" id="reference" name="reference" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="reference"><img src="reference.svg" /> External References<span class="count" data-total='*'></span></label>
+					<input class="filter" type="checkbox" id="reference" name="reference" onclick="filterClick(event, this)" checked>
+					<label for="reference"><img alt="" src="reference.svg"> External References<span class="count" data-total='*'></span></label>
+					<img onclick="popup('help-external')" alt="help" src="help.svg">
 					<fieldset class="nested-filters" id="reference-filters">
+						<img onclick="popup('help-external-filter')" alt="help" src="help.svg">
 					</fieldset>
 
-					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="incoming-dependency"><img src="incoming-dependency.svg" /> Incoming Dependencies<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="incoming-dependency" name="incoming-dependency" onclick="filterClick(event, this)" checked>
+					<label for="incoming-dependency"><img alt="" src="incoming-dependency.svg"> Incoming Dependencies<span class="count"></span></label>
 
-					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filter()" ondblclick="doubleClick(this)" checked />
-					<label for="outgoing-dependency"><img src="outgoing-dependency.svg" /> Outgoing Dependencies<span class="count"></span></label>
+					<input class="filter" type="checkbox" id="outgoing-dependency" name="outgoing-dependency" onclick="filterClick(event, this)" checked>
+					<label for="outgoing-dependency"><img alt="" src="outgoing-dependency.svg"> Outgoing Dependencies<span class="count"></span></label>
+
+					<img onclick="popup('help-dependency')" alt="help" src="help.svg">
 
 				</div>
 
-				<hr />
+				<hr>
 			</form>
 		</fieldset>
+
+		<div id="popup" class="modal-popup">
+			<span class="modal-popup-close">&times;</span>
+			<div id="help-unit" class="modal-popup-description">
+				<div>
+					<h3>Unit Category</h3>
+					<p>
+						The units of a p2 repository or an Eclipse product installation are categorized according to the following classifiers.
+					</p>
+					<dl>
+						<dt><img alt="" src="binary.svg"> Binary</dt>
+						<dd>
+							A binary unit is a component of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">library</a>.
+							It is generally a zip file
+							whose content is processed by so-called touchpoints to provision artifacts into an installation.
+							For example,
+							it can contain a native executable
+							that will be assigned the appropriate POSIX permissions when placed at its intended destination.
+						</dd>
+						<dt><img alt="" src="bundle.svg"> Bundle</dt>
+						<dd>
+							A bundle unit is a component of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">library</a>.
+							It is a jar representing an OSGi bundle.
+							The jar may be unpacked when provisioned into an installation.
+						</dd>
+						<dt><img alt="" src="feature.svg"> Feature</dt>
+						<dd>
+							A feature unit is a component of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">library</a>.
+							It is a jar representing an Eclipse feature,
+							which is effectively a collection of dependencies on other bundles and features
+							that should be installed together to provide some logically cohesive functionality.
+							The jar may be unpacked when provisioned into an installation.
+						</dd>
+						<dt><img alt="" src="metadata.svg"> Metadata</dt>
+						<dd>
+							A metadata unit is a component of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">data</a>.
+							It is a logical component for which no corresponding physical artifact exists.
+							It exists only in a p2 metadata repository or in an installation profile,
+							which is also logically a metadata p2 repository.
+							It specifies dependencies on other components
+							as well as touchpoints describing actions to be applied to artifacts as they are installed.
+							For example, it may set program arguments or VM arguments in a product's <code>*.ini</code>.
+						</dd>
+					</dl>
+					<hr>
+					<p id="enable-all-disable-all-row">
+						Double clicking an item in this row of filters will make it the only check-marked filter
+						except if it's already the only check-marked filter,
+						in which case all filters will be check-marked.
+					</p>
+				</div>
+			</div>
+
+			<div id="help-name" class="modal-popup-description">
+				<h3>Unit Name</h3>
+				<p>
+					Each component has a <a href="https://cyclonedx.org/docs/1.6/json/#components_items_name">name</a>.
+					In terms of p2, this is generally the ID of the unit, which, along with the version, uniquely identifies unit.
+				</p>
+				<p>
+					The content of the view can be filtered to show only the units matching the specified name.
+					If the search value starts with a <code>/</code>,
+					it will be interpreted as a <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions/Cheatsheet">regular expression</a>.
+					Otherwise the search value will be interpreted literally.
+				</p>
+				<p>
+					Use the <code>Enter</code> key to apply the filter;
+					clear the field to remove the filter.
+				</p>
+			</div>
+
+			<div id="help-children" class="modal-popup-description">
+				<h3>Children</h3>
+				<p>
+					Details about each component are available as nested content.
+					This so-call child content can be displayed via
+					the <span data-generate="generateSampleButton(collapsed)"></span> expand
+					/ <span data-generate="generateSampleButton(expanded)"></span> collapse
+					icon to the left of each component.
+					Each type of child content can be individually filtered to reduce the overall information content of the rendered SBOM
+					and to provide an overview of just the child content of interest.
+				</p>
+				<p>
+					Via the child filters,
+					you can select to show all components,
+					only those components with nested children,
+					or only those components with no children.
+				</p>
+				<p>
+					You might, for example,
+					filter the child content to show only licenses,
+					and then elect to show only components with no children
+					to get a list of components without licenses.
+				</p>
+			</div>
+
+			<div id="help-purl" class="modal-popup-description">
+				<h3>Package URL</h3>
+				<p>
+					Each component optionally has a <a href="https://cyclonedx.org/docs/1.6/json/#components_items_purl">PURL</a>, or package-url, that uniquely identifies the component.
+					For the CBI SBOM generator, every component has an associated PURL.
+					This URL generally encodes traceability details about the origin on the component,
+					e.g.,
+					the Maven coordinates of an artifact from Maven Central, or
+					the originating p2 URL repository along with sufficient details for locating the component that that repository.
+				</p>
+				<hr>
+				<p id="enable-all-disable-all">
+					Double clicking this item will make it the only check-marked child filter
+					except if it's already the only check-marked child filter,
+					in which case all child filters will be check-marked.
+				</p>
+			</div>
+
+			<div id="help-pedigree" class="modal-popup-description">
+				<h3>Pedigree</h3>
+				<p>
+					In some cases a component is known to be derived from another component.
+					The component from which it is derived is recorded as the <a href="https://cyclonedx.org/docs/1.6/json/#components_items_pedigree">pedigree</a>,
+					specifically via the <a href="https://cyclonedx.org/docs/1.6/json/#components_items_pedigree_ancestors">pedigree ancestor</a>.
+				</p>
+				<p>
+					Many artifacts available in Maven Central are not provided in the form of an OSGi bundle,
+					i.e., do that have the required OSGi metadata in the <code>MANIFEST.MF</code> that is necessary to function as an OSGi bundle in an OSGi runtime.
+					Such an artifact can be repackaged using BND instructions to synthesize the necessary OSGi metadata.
+					The Maven Central artifact PURL of the original component is captured to provide traceability.
+				</p>
+				<p>
+					The source artifact associated with each Maven Central binary artifact is also generally not in the form of an OSGi bundle.
+					These are automatically transformed by Tycho to add the necessary OSGI metadata to the <code>MANIFEST.MF</code>.
+				</p>
+				<p>
+					In these cases, the Maven Central artifact PURL of the original component is captured in the pedigree to provide traceability details.
+					In general, the CBI SBOM generator will compare the checksums of a Maven Central artifact against the checksums of the local artifact
+					before generating a PURL reference to the Maven Central artifact.
+					When they do not match exactly,
+					the pedigree captures the derivation link.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-hashsum" class="modal-popup-description">
+				<h3>Hash Sum</h3>
+				<p>
+					Each component optionally has <a href="https://cyclonedx.org/docs/1.6/json/#components_items_hashes">hashes</a>
+					to provide a way to verify that a component's content matches what is expected.
+					The CBI aggregator produces hashes for each component that corresponds to a physical artifact,
+					i.e., each components of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">library</a>.
+					The <a href="https://cyclonedx.org/docs/1.6/json/#components_items_hashes_items_alg">algorithm</a> of the hash is displayed;
+					the content can be displayed by hovering and can copied to the clipboard by clicking on algorithm label.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-license" class="modal-popup-description">
+				<h3>License</h3>
+				<p>
+					Each component optionally has <a href="https://cyclonedx.org/docs/1.6/json/#components_items_licenses">licenses</a>.
+					Licences are bit of a mess.
+					There are so many different ways and places to specify license details,
+					producing consistent, well-formed, accurate license information is a significant challenge for the CBI SBOM generator.
+					A license name and license URI are recorded on a best-effort basis.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-detail" class="modal-popup-description">
+				<h3>Detail</h3>
+				<p>
+					Each component optionally has supplementary details such as
+					<a href="https://cyclonedx.org/docs/1.6/json/#components_items_publisher">publisher</a> and
+					<a href="https://cyclonedx.org/docs/1.6/json/#components_items_description">description</a>.
+					These details are generally available for all bundle and feature components.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-property" class="modal-popup-description">
+				<h3>Property</h3>
+				<p>
+					Each component optionally has <a href="https://cyclonedx.org/docs/1.6/json/#components_items_properties">properties</a>,
+					i.e., a series of name-value pairs that capture additional relevant information.
+					In general p2 units have many associated properties,
+					most of which are captured in other aspect of the generated SBOM,
+					and are therefore generally filtered out by the CBI SBOM generator.
+				</p>
+				<p>
+					The CBI SBOM generator currently attempts to find license information via <a href="https://clearlydefined.io">https://clearlydefined.io</a>
+					which generally works well only for artifacts from Maven Central.
+					These are recorded in the property <code>clearly-defined</code>.
+				</p>
+				<p>
+					The CBI SBOM generator records touchpoint information as properties.
+					Touchpoints are relevant from a security point of view because a touchpoint can in principle configure the installation in a way that affects behaviour of the system,
+					possibly in a way that compromises security.
+					Of course generally the touchpoints do simple necessary things
+					like unzipping an artifact,
+					setting POSIX permissions of a resource,
+					and setting required program and VM arguments in the product's <code>*.ini</code>.
+					These are recorded in the property <code>touchpoint</code>.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-property-filter" class="modal-popup-description">
+				<h3>Property Name</h3>
+				<p data-copy="enable-all-disable-all-row">
+				</p>
+			</div>
+
+			<div id="help-external" class="modal-popup-description">
+				<h3>External Reference</h3>
+				<p>
+					Each component optionally has <a href="https://cyclonedx.org/docs/1.6/json/#components_items_externalReferences">external references</a>,
+					i.e., a series of <a href="https://cyclonedx.org/docs/1.6/json/#components_items_externalReferences_items_type">typed</a>
+					<a href="https://cyclonedx.org/docs/1.6/json/#components_items_externalReferences_items_url">URLs</a>
+					that reference external sites of the given type.
+				</p>
+				<p>
+					The CBI SBOM generator currently attempts to find license information via <a href="https://clearlydefined.io">https://clearlydefined.io</a>
+					which generally works well only for artifacts from Maven Central.
+					These are recorded in the property <code>clearly-defined</code>.
+				</p>
+				<p>
+					The CBI SBOM generator records touchpoint information as properties.
+					Touchpoints are relevant from a security point of view because a touchpoint can in principle configure the installation in a way that affects behaviour of the system,
+					possibly in a way that compromises security.
+					Of course generally the touchpoints do simple necessary things
+					like unzipping an artifact,
+					setting POSIX permissions of a resource,
+					and setting required program and VM arguments in the product's <code>*.ini</code>.
+					These are recorded in the property <code>touchpoint</code>.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-external-filter" class="modal-popup-description">
+				<h3>External Reference Type</h3>
+				<p data-copy="enable-all-disable-all-row">
+				</p>
+			</div>
+
+			<div id="help-dependency" class="modal-popup-description">
+				<h3>Dependency: Incoming and Outgoing</h3>
+				<p>
+					An SBOM supports specifying <a href="https://cyclonedx.org/docs/1.6/json/#dependencies">dependencies</a> between components.
+					Directly represented in the SBOM are each
+					<a href="https://cyclonedx.org/docs/1.6/json/#dependencies_items_ref">component's</a>
+					<a href="https://cyclonedx.org/docs/1.6/json/#dependencies_items_dependsOn">dependencies on other components</a>.
+					These are the so-called incoming dependencies.
+					The renderer also displays the inverse of this information,
+					i.e., the so-called outgoing dependencies.
+					These dependencies between components are linkified by the render to support navigation in either direction.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-root" class="modal-popup-description">
+				<h3>SBOM Metadata</h3>
+				<p>
+					The CBI SBOM generator populates the following information for each SBOM:
+				</p>
+				<ul>
+					<li>
+						The <a href="https://cyclonedx.org/docs/1.6/json/#version">version</a> of the SBOM.
+					</li>
+					<li>
+						The <a href="https://cyclonedx.org/docs/1.6/json/#bomFormat">format</a> of the SBOM.
+					</li>
+					<li>
+						The <a href="https://cyclonedx.org/docs/1.6/json/#specVersion">specification version</a> of the SBOM format.
+					</li>
+					<li>
+						The <a href="https://cyclonedx.org/docs/1.6/json/#serialNumber">serial number</a> of the SBOM.
+					</li>
+				</ul>
+			</div>
+
+			<div id="help-control" class="modal-popup-description">
+				<h3>Control Area</h3>
+				<p>
+					The control area provides the following support:
+				</p>
+				<ul>
+					<li>
+						The <span data-generate="generateSampleButton(showing)"></span> hide
+						/ <span data-generate="generateSampleButton(hidden)"></span> show
+						icon allows to hide and show the entire filter and control area above to provide more real estate for the content below.
+					</li>
+					<li>
+						The <span data-generate="generateSampleButton(reset)"></span> reset icon
+						allows to reset all filters and controls above to their default values.
+					</li>
+					<li>
+						The <span data-generate="generateSampleButton(collapsed)"></span> Expand All
+						/ <span data-generate="generateSampleButton(expanded)"></span> collapse All
+						icon allows to expand or collapse all the content below.
+					</li>
+					<li>
+						The <div class="loader" style="display: inline-block"></div> animated busy indicator
+						is displayed while the view contents are being computed.
+					</li>
+				</ul>
+			</div>
+
+		</div>
 
 		<pre id="target"></pre>
 		<div id="formatted-target"></div>
