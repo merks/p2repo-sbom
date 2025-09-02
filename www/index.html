@@ -963,7 +963,42 @@ ${getLicenseElementDetail(license)}
 			return search.get(id);
 		}
 
+		function addMapFunction(value) {
+			if (!value.map) {
+				Object.getPrototypeOf(value).map = function (mapper) {
+					const result = [];
+					for (const entry of this) {
+						const item = mapper(entry);
+						result.push(item);
+					}
+					return result.values();
+				}
+
+				Object.getPrototypeOf(value.map()).toArray = function () {
+					const result = [];
+					for (const entry of this) {
+						result.push(entry);
+					}
+					return result;
+				}
+			}
+		}
+
+		function hackOlderJavascript() {
+			addMapFunction(new Map().entries());
+			addMapFunction(new URLSearchParams().entries());
+			if (!Object.prototype.hasOwnProperty.call(RegExp, 'escape')) {
+				RegExp.escape = function (string) {
+					// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions#Escaping
+					// https://github.com/benjamingr/RegExp.escape/issues/37
+					return string.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+				};
+			}
+		}
+
 		function onload() {
+			hackOlderJavascript();
+
 			changeInputType();
 
 			const form = document.getElementById('form');
