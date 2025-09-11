@@ -105,7 +105,7 @@ osgi.arch=ppc64,osgi.os=linux
 osgi.os=aix
 osgi.arch=sparc,osgi.os=solaris
 -expected-missing-artifact-iu-patterns
-org\.eclipse\.(help|jdt|pde|pde\.spies|platform|rcp)\.source\.feature\.group:.*
+org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]group:.*
 -xml-output
 sbom.xml
 -json-output
@@ -125,7 +125,7 @@ local-target->https://download.eclipse.org/technology/epp/downloads/release/2025
 -installations
 local-target
 -expected-missing-artifact-iu-patterns
-org\.eclipse\.(help|jdt|pde|pde\.spies|platform|rcp)\.source\.feature\.group:.*
+org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]group:.*
 -xml-outputs
 .
 -json-outputs
