@@ -3,3 +3,5 @@ bin/
 *~
 testarea/
 build.log
+docs/.project
+docs/.settings/**
