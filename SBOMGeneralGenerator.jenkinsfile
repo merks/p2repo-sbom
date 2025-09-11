@@ -104,6 +104,8 @@ org.eclipse.equinox.p2.install.mode.root=true
 osgi.arch=ppc64,osgi.os=linux
 osgi.os=aix
 osgi.arch=sparc,osgi.os=solaris
+-expected-missing-artifact-iu-patterns
+org\.eclipse\.(help|jdt|pde|pde\.spies|platform|rcp)\.source\.feature\.group:.*
 -xml-output
 sbom.xml
 -json-output
@@ -122,6 +124,8 @@ def  epp2025_09_R_products  = [
 local-target->https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/
 -installations
 local-target
+-expected-missing-artifact-iu-patterns
+org\.eclipse\.(help|jdt|pde|pde\.spies|platform|rcp)\.source\.feature\.group:.*
 -xml-outputs
 .
 -json-outputs

@@ -242,7 +242,7 @@ public class SBOMApplication implements IApplication {
 			}
 		}
 
-		return null;
+		return EXIT_OK;
 	}
 
 	private void generateIndex(Path indexPath, URI renderer, List<SBOMGenerator.Result> sbomGeneratorResults)
@@ -394,6 +394,8 @@ public class SBOMApplication implements IApplication {
 
 		private final List<IInstallableUnit> exclusiveContextIUs = new ArrayList<>();
 
+		private final List<Pattern> expectedMissingArtifactIUPatterns = new ArrayList<>();
+
 		private final Map<URI, URI> uriRedirections;
 
 		private final List<Path> outputs = new ArrayList<>();
@@ -439,6 +441,11 @@ public class SBOMApplication implements IApplication {
 
 			for (var requirementExclusions : getArguments("-requirement-exclusions", args, List.of())) {
 				exclusiveContextIUs.add(createContextIU(requirementExclusions));
+			}
+
+			for (var expectedMissingArtifactIUPattern : getArguments("-expected-missing-artifact-iu-patterns", args,
+					List.of())) {
+				expectedMissingArtifactIUPatterns.add(Pattern.compile(expectedMissingArtifactIUPattern));
 			}
 
 			combinedRepositoryURIs.addAll(getArguments("-input", args, List.of()).stream().map(URI::create).toList());
@@ -616,10 +623,13 @@ public class SBOMApplication implements IApplication {
 
 				if (isMetadata(artifactDescriptor)) {
 					var artifacts = iu.getArtifacts();
-					if (iu.getId().endsWith(".feature.group")) {
-						component.addProperty(createProperty("missing-artifact", "org.eclipse.update.feature,"
-								+ iu.getId().replaceAll("\\.feature\\.group", "") + "," + iu.getVersion()));
-					} else if (!artifacts.isEmpty()) {
+					var id = iu.getId();
+					if (id.endsWith(".feature.group")) {
+						if (!isExpectedMissingArtifact(iu)) {
+							component.addProperty(createProperty("missing-artifact", "org.eclipse.update.feature,"
+									+ id.replaceAll("\\.feature\\.group", "") + "," + iu.getVersion()));
+						}
+					} else if (!artifacts.isEmpty() && !isExpectedMissingArtifact(iu)) {
 						component.addProperty(createProperty("missing-artifact",
 								String.join(";", artifacts.stream().map(Object::toString).toList())));
 					}
@@ -1401,6 +1411,16 @@ public class SBOMApplication implements IApplication {
 			if (requirement instanceof IRequiredCapability requiredCapability) {
 				var namespace = requiredCapability.getNamespace();
 				if (PublisherHelper.NAMESPACE_ECLIPSE_TYPE.equals(namespace)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private boolean isExpectedMissingArtifact(IInstallableUnit iu) {
+			var value = iu.getId() + ":" + iu.getVersion();
+			for (Pattern expectedMissingArtifactIUPattern : expectedMissingArtifactIUPatterns) {
+				if (expectedMissingArtifactIUPattern.matcher(value).matches()) {
 					return true;
 				}
 			}
