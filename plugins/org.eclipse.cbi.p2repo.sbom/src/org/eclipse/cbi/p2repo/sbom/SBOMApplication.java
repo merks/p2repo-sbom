@@ -661,7 +661,11 @@ public class SBOMApplication implements IApplication {
 					try {
 						future.get();
 					} catch (ExecutionException e) {
-						multiStatus.add(new Status(IStatus.ERROR, getClass(), e.getMessage(), e));
+						var message = e.getMessage();
+						if (verbose) {
+							System.err.println("Execution exception: " + message);
+						}
+						multiStatus.add(new Status(IStatus.ERROR, getClass(), message, e));
 					}
 				}
 
