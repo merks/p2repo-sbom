@@ -135,6 +135,50 @@ org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]gro
 """),
 ]
 
+def  simRelStaging  = [
+  label: 'SimRel 2025-12 StagingRepository',
+  BUILD_DESCRIPTION: 'Build the SBOMs for the SimRel 2025-12 Staging Repository',
+  SCP: "",
+  ARGS: pretty("""
+-input
+https://download.eclipse.org/staging/2025-12
+https://download.eclipse.org/technology/epp/staging/repository
+-requirement-exclusions
+org.eclipse.equinox.p2.install.mode.root=true
+osgi.arch=ppc64,osgi.os=linux
+osgi.os=aix
+osgi.arch=sparc,osgi.os=solaris
+-expected-missing-artifact-iu-patterns
+org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]group:.*
+-xml-output
+sbom.xml
+-json-output
+sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
+def  simRelStagingProducts  = [
+  label: 'EPP 2025-12 Staging Products',
+  BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-12 Staging Products.',
+  SCP: "technology/epp/staging/*.zip technology/epp/staging/*.tar.gz",
+  ARGS: pretty("""
+-redirections
+local-target->https://download.eclipse.org/technology/epp/staging/
+-installations
+local-target
+-expected-missing-artifact-iu-patterns
+org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]group:.*
+-xml-outputs
+.
+-json-outputs
+.
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
 def parambuilds = [
   eclipseMilestoneInstaller,
   eclipseMilestoneInstallers,
@@ -143,6 +187,28 @@ def parambuilds = [
   eclipse437SDKs,
   simRel2025_09,
   epp2025_09_R_products,
+  simRelStaging,
+  simRelStagingProducts,
+]
+
+def defaultBuild = eclipseMilestoneInstaller
+
+// Use declarative syntax to run commands inside a Groovy sand-box container.
+pipeline {
+  agent { label 'centos-latest' }
+
+  options {
+    buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '1'))
+    disableConcurrentBuilds()
+    durabilityHint('MAX_SURVIVABILITY')
+  }
+
+  tools {
+    maven 'apache-maven-latest'
+    jdk 'temurin-jdk21-latest'
+  }
+
+  environment {
 ]
 
 def defaultBuild = eclipseMilestoneInstaller
