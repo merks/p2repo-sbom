@@ -209,26 +209,6 @@ pipeline {
   }
 
   environment {
-]
-
-def defaultBuild = eclipseMilestoneInstaller
-
-// Use declarative syntax to run commands inside a Groovy sand-box container.
-pipeline {
-  agent { label 'centos-latest' }
-
-  options {
-    buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '1'))
-    disableConcurrentBuilds()
-    durabilityHint('MAX_SURVIVABILITY')
-  }
-
-  tools {
-    maven 'apache-maven-latest'
-    jdk 'temurin-jdk21-latest'
-  }
-
-  environment {
     BUILD_TIME_STAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M').trim()
     BASE_STORAGE_LOCATION = '/home/data/httpd/download.eclipse.org'
     PUBLISH_RELATIVE_LOCATION = 'cbi/archive/sboms'
