@@ -22,23 +22,26 @@ To produce an SBOM for an Eclipse application,
 the building blocks of the application must be mapped onto a formal SBOM model.
 The CBI p2 SBOM generator uses 
 [ClyconeDX](https://cyclonedx.org/)
-as for the formal representation,
+as the formal representation,
 currently specification version
 [1.6](https://cyclonedx.org/specification/overview/).
 
-OSGi provides a rich metadata for each bundle,
-e.g., bundle symbolic name, bundle version, and so on.
+OSGi provides rich metadata for each bundle,
+e.g.,
+bundle symbolic name,
+bundle version,
+and so on.
 In terms of dependencies,
 each bundle declares its provided
 [capabilities](https://docs.osgi.org/specification/osgi.core/8.0.0/framework.module.html#d0e2870)
 and specifies
 [requirements](https://docs.osgi.org/specification/osgi.core/8.0.0/framework.module.html#d0e3015)
 relative to such capabilities.
-The p2 framework provides analgous concepts,
+The p2 framework provides analogous concepts,
 projecting the OSGi metadata as p2 metadata.
 This information is a rich source of details from which to derive an SBOM.
 That being said,
-there is a significant impedence mismatch between the concept of OSGi/p2 requirements versus the concept of SBOM dependencies.
+there is a significant impedance mismatch between the concept of OSGi/p2 requirements versus the concept of SBOM dependencies.
 
 
 ## Application Units
@@ -54,17 +57,17 @@ as supported by the Eclipse Plug-in Development Environment,
   is a collection of dependencies on plug-ins, fragments, and other features.
   It is intended as a user-facing unit that provides support for some high-level functionality that the user may choose to install in an application
 - A [product](https://help.eclipse.org/latest/index.jsp?topic=%2Forg.eclipse.pde.doc.user%2Fconcepts%2Fproduct.htm&cp%3D4_1_4)
-  is a description of a complete standalone Eclipse application,
-  specifying the bundles, fragments, and features to be installed, program argments, JVM arguments, branding details, and so on.
-All the building blocks are mapped onto p2 and made available via p2 repositories.
+  is a description of a complete stand-alone Eclipse application,
+  specifying the bundles, fragments, and features to be installed, program arguments, JVM arguments, branding details, and so on.
+All these building blocks are mapped onto p2 and made available via p2 repositories.
 
 ## p2 Repositories
 
 The p2 framework supports two types of repository, often colocated at the same URL:
 - Metadata 
-  - This provide acccess to
-    [installable units](https://eclipse.dev/eclipse/markdown/?file=eclipse-equinox/p2/master/docs/Installable_Units.md)
-    which specify metadata about all the units available for provisioninioning an application,
+  - This provide access to
+    [installable units](https://eclipse.dev/eclipse/markdown/?file=eclipse-equinox/p2master/docs/Installable_Units.md)
+    which specify metadata about all the units available for provisioning an application,
     including the unit's provided capabilities as well as it's required capabilities.
     Each installable unit is uniquely identified by its ID and version.
 - Artifact 
@@ -81,30 +84,212 @@ The engine builds a so-called plan using
 and then executes that plan.
 
 An installable unit typically, but not always, has an associated artifact specified by an artifact key.
-For the enine to execute the plan,
+For the engine to execute the plan,
 one or more artifact repositories providing access to the corresponding artifact of each installable unit in the plan must be made available.
 An installable unit can also specify touchpoints,
 i.e., instructions for how to process the specified artifact,
-or even instuctions for how to modify the target installation.
+or even instructions for how to modify the target installation.
 
 ### Installations
 
-The building block that comprise an Eclipde product installation,
+The building blocks that comprise an Eclipse product installation,
 as provisioned by p2,
-is defined by the following:
+are defined by the following:
 - A profile that specifies the installable units of the installation, which is logically a p2 metadata repository.
 - An artifact repository that specifies the location of each corresponding artifact of each installable unit in that installation.
 
 In this sense,
 an installation is logically equivalent to a pair p2 repositories.
 The CBI p2 SBOM generator exploits this equivalence,
-making it possible to generate an SBOM for p2 repositories and Eclipse installations with the same underlying implementation logic.
+making it possible to generate an SBOM for p2 repositories and for Eclipse installations with the same underlying implementation logic.
 
 ## SBOM Component Mapping
 
 Given the typical close correspondence between installable unit and artifact,
-and given SBOMs focus on components as artifacts,
-it is beneficial to unify these two during the mapping process.
+and given SBOM's primary focus on components as artifacts,
+it is beneficial to unify these two during the process of mapping p2 units and artifacts onto SBOM components.
+The components of a generated SBOM are classified as follows:
+
+### Bundle
+
+A bundle unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
+It corresponds to both an installable unit as well as that unit's associated artifact.
+```
+<unit id='org.example.abc' version='1.1.0.v20250601-0000' generation='2'>
+  <update id='org.example.abc' range='[0.0.0,1.1.0.v20250601-0000)' severity='0'/>
+  <provides size='10'>
+    <provided namespace='org.example.abc.p2.iu' name='org.example.abc' version='1.1.0.v20250601-0000'/>
+    <provided namespace='osgi.bundle' name='org.example.abc' version='1.1.0.v20250601-0000'/>
+    <provided namespace='osgi.identity' name='org.example.abc' version='1.1.0.v20250601-0000'>
+      <properties size='1'>
+        <property name='type' value='osgi.bundle'/>
+      </properties>
+    </provided>
+    <provided namespace='org.eclipse.equinox.p2.eclipse.type' name='bundle' version='1.0.0'/>
+  </provides>
+  <artifacts size='1'>
+    <artifact classifier='osgi.bundle' id='org.example.abc' version='1.1.0.v20250601-0000'/>
+  </artifacts>
+</unit>
+```
+The artifact is a jar representing an OSGi bundle.
+The jar may be unpacked when provisioned into an installation.
+
+### Feature
+
+A feature unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
+It corresponds to a pair of installable units, `*.feature.group`/`*.feature.jar`,
+as well the units' associated artifact.
+```
+<unit id='org.example.abc.feature.group' version='1.0.0.v20250601-000' singleton='false'>
+  <update id='org.example.abc.feature.group' range='[0.0.0,1.0.0.v20250601-000)' severity='0'/>
+  <provides size='2'>
+    <provided namespace='org.eclipse.equinox.p2.iu' name='org.example.abc.feature.group' 
+        version='1.0.0.v20250601-000'/>
+  </provides>
+  <requires size='2'
+    <required namespace='org.eclipse.equinox.p2.iu' name='org.exexample.abc'
+        range='[1.0.0.v20250601-000,1.0.0.v20250601-000]'/>
+    <required namespace='org.eclipse.equinox.p2.iu' name='org.example.abc.feature.jar'
+        range='[1.0.0.v20250601-000,1.0.0.v20250601-000]'>
+      <filter>
+        (org.eclipse.update.install.features=true)
+      </filter>
+    </required>
+  </requires>
+</unit>
+<unit id='org.example.abc.feature.jar' version='1.0.0.v20250601-000'>
+  <provides size='3'>
+    <provided namespace='org.eclipse.equinox.p2.iu' name='org.example.abc.feature.jar'
+        version='1.0.0.v20250601-000'/>
+    <provided namespace='org.eclipse.equinox.p2.eclipse.type' name='feature' version='1.0.0'/>
+    <provided namespace='org.eclipse.update.feature' name='org.example.abc' version='1.0.0.v20250601-000'/>
+  </provides>
+  <filter>
+    (org.eclipse.update.install.features=true)
+  </filter>
+  <artifacts size='1'>
+    <artifact classifier='org.eclipse.update.feature' id='org.example.abc' version='1.0.0.v20250601-000'/>
+  </artifacts>
+  <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.0'/>
+  <touchpointData size='1'>
+    <instructions size='1'>
+      <instruction key='zipped'>
+        true
+      </instruction>
+    </instructions>
+  </touchpointData>
+</unit>
+```
+It is a jar representing an Eclipse feature.
+The jar effectively just contains the `feature.xml` and therefore contributes no behavior to an actual running application.
+The feature jar will be unpacked when provisioned into an installation.
+
+### Binary
+
+A binary unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
+It corresponds to both an installable unit as well as that unit's associated artifact.
+```
+<unit id='org.example.abc.executable_root.gtk.linux.x86_64' version='1.0.0.v20250601-000'>
+  <provides size='1'>
+    <provided namespace='org.eclipse.equinox.p2.iu' name='org.example.abc.executable_root.gtk.linux.x86_64'
+        version='1.0.0.v20250601-000'/>
+  </provides>
+  <filter>
+    (&amp;(osgi.arch=x86_64)(osgi.os=linux)(osgi.ws=gtk))
+  </filter>
+  <artifacts size='1'>
+    <artifact classifier='binary' id='org.example.abc.executable_root.gtk.linux.x86_64'
+        version='1.0.0.v20250601-000'/>
+  </artifacts>
+  <touchpoint id='org.eclipse.equinox.p2.native' version='1.0.0'/>
+  <touchpointData size='2'>
+    <instructions size='2'>
+      <instruction key='uninstall'>
+        cleanupzip(source:@artifact, target:${installFolder});
+      </instruction>
+      <instruction key='install'>
+        unzip(source:@artifact, target:${installFolder});
+      </instruction>
+    </instructions>
+    <instructions size='1'>
+      <instruction key='install'>
+        chmod(targetDir:${installFolder}, targetFile:launcher, permissions:755);
+      </instruction>
+    </instructions>
+  </touchpointData>
+</unit>
+```
+It is generally a zip file
+whose content is processed by so-called touchpoints to provision artifacts into an installation.
+For example,
+it can contain a native executable
+that will be assigned the appropriate POSIX permissions when placed at its intended destination.
+
+
+### Metadata
+
+A metadata unit is a component of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">data</a>.
+It is a logical component for which no corresponding physical artifact exists.
+```
+<unit id='toolingorg.example.abc.ini.gtk.linux.x86_64' version='1.0.0.v20250601-000' singleton='false'>
+  <provides size='2'>
+    <provided namespace='org.eclipse.equinox.p2.iu' name='toolingorg.example.abc.ini.gtk.linux.x86_64'
+        version='1.0.0.v20250601-000'/>
+    <provided namespace='toolingorg.example.abc' name='epp.package.committers.ini' version='1.0.0.v20250601-000'/>
+  </provides>
+  <filter>
+    (&amp;(osgi.arch=x86_64)(osgi.os=linux)(osgi.ws=gtk))
+  </filter>
+  <touchpoint id='org.eclipse.equinox.p2.osgi' version='1.0.0'/>
+  <touchpointData>
+    <instructions>
+      <instruction key='unconfigure'>
+        removeJvmArg(jvmArg:-Dosgi.requiredJavaVersion=21);
+        removeJvmArg(jvmArg:-Dosgi.instance.area.default=@user.home/eclipse-workspace);
+        removeJvmArg(jvmArg:-Dosgi.dataAreaRequiresExplicitInit=true);
+        removeJvmArg(jvmArg:-Dorg.eclipse.swt.graphics.Resource.reportNonDisposed=true);
+        removeJvmArg(jvmArg:-Declipse.e4.inject.javax.warning=false);
+        removeJvmArg(jvmArg:-Dorg.slf4j.simpleLogger.defaultLogLevel=off);
+        removeJvmArg(jvmArg:-Dsun.java.command=Eclipse);
+        removeJvmArg(jvmArg:-XX${#58}+UseG1GC);
+        removeJvmArg(jvmArg:-XX${#58}+UseStringDeduplication);
+        removeJvmArg(jvmArg:--add-modules=ALL-SYSTEM);
+        removeProgramArg(programArg:-product);
+        removeProgramArg(programArg:org.eclipse.epp.package.committers.product);
+        removeProgramArg(programArg:-showsplash);
+        removeProgramArg(programArg:org.eclipse.epp.package.common);
+        removeProgramArg(programArg:--launcher.defaultAction);
+        removeProgramArg(programArg:openFile);
+        removeProgramArg(programArg:--launcher.appendVmargs);
+      </instruction>
+      <instruction key='configure'>
+        addJvmArg(jvmArg:-Dosgi.requiredJavaVersion=21);
+        addJvmArg(jvmArg:-Dosgi.instance.area.default=@user.home/eclipse-workspace);
+        addJvmArg(jvmArg:-Dosgi.dataAreaRequiresExplicitInit=true);
+        addJvmArg(jvmArg:-Dorg.eclipse.swt.graphics.Resource.reportNonDisposed=true);
+        addJvmArg(jvmArg:-Declipse.e4.inject.javax.warning=false);
+        addJvmArg(jvmArg:-Dorg.slf4j.simpleLogger.defaultLogLevel=off);
+        addJvmArg(jvmArg:-Dsun.java.command=Eclipse);
+        addJvmArg(jvmArg:-XX${#58}+UseG1GC);
+        addJvmArg(jvmArg:-XX${#58}+UseStringDeduplication);
+        addJvmArg(jvmArg:--add-modules=ALL-SYSTEM);
+        addProgramArg(programArg:-product);
+        addProgramArg(programArg:org.eclipse.epp.package.committers.product);
+        addProgramArg(programArg:-showsplash);
+        addProgramArg(programArg:org.eclipse.epp.package.common);
+        addProgramArg(programArg:--launcher.defaultAction);
+        addProgramArg(programArg:openFile);
+        addProgramArg(programArg:--launcher.appendVmargs);
+      </instruction>
+    </instructions>
+  </touchpointData></unit>
+```
+It exists only in a p2 metadata repository or in an installation profile,
+which is also logically a metadata p2 repository.
+It can specify dependencies on other components
+as well as touchpoints describing actions to be applied to artifacts as they are installed.
+For example, it may set program arguments or VM arguments in a product's <code>*.ini</code>.
 
 
 ## Tycho SBOM
@@ -130,6 +315,4 @@ e.g., com.sun.xml.bind,
 probably as a result of resolving package requirements to all possible providers in the target platform,
 also lots of *.source bundles that aren't in the product.
 More care must be taken when generating PURLs that in fact the maven artifact has the same hash sums as the p2/local artifact.
-
-
 
