@@ -70,7 +70,6 @@ import java.util.jar.JarInputStream;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -2219,8 +2218,10 @@ public class SBOMApplication implements IApplication {
 		public static String urlEncodeQueryParameter(String value) {
 			// Decode characters such as / and: that are very common in URIs
 			// and do not need to be encoded within a URI's query string.
+			// Same for ! which we use for archive URIs when building an SBOM for a product
+			// in a *.zip/*.tar.gz.
 			var result = URLEncoder.encode(value, StandardCharsets.UTF_8);
-			return result.replace("%2F", "/").replace("%3A", ":");
+			return result.replace("%2F", "/").replace("%3A", ":").replace("%21", "!");
 		}
 	}
 
