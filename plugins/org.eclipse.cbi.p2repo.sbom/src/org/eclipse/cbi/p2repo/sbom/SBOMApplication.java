@@ -397,7 +397,7 @@ public class SBOMApplication implements IApplication {
 
 		private final List<URI> artifactRepositoryURIs = new ArrayList<>();
 
-		private List<ArtifactSourceRepository> artifactSourceRepositories;
+		private final List<String> p2ArtifactSourceRepositories = new ArrayList<>();
 
 		private final List<IInstallableUnit> inclusiveContextIUs = new ArrayList<>();
 
@@ -429,7 +429,7 @@ public class SBOMApplication implements IApplication {
 
 		private IArtifactRepositoryManager artifactRepositoryManager;
 
-		private List<String> p2ArtifactSourceRepositories;
+		private List<ArtifactSourceRepository> artifactSourceRepositories;
 
 		private SBOMGenerator(List<String> args) throws Exception {
 			contentHandler = new ContentHandler(getArgument("-cache", args, null));
@@ -464,12 +464,12 @@ public class SBOMApplication implements IApplication {
 					.addAll(getArguments("-metadata", args, List.of()).stream().map(URI::create).toList());
 			artifactRepositoryURIs
 					.addAll(getArguments("-artifact", args, List.of()).stream().map(URI::create).toList());
+			p2ArtifactSourceRepositories.addAll(getArguments("-p2sources", args, List.of()));
 
 			xmlOutput = getArgument("-xml-output", args, null);
 			jsonOutput = getArgument("-json-output", args, null);
 			json = getArgument("-json", args);
 			xml = getArgument("-xml", args) || !json && xmlOutput == null && jsonOutput == null;
-			p2ArtifactSourceRepositories = getArguments("-p2sources", args, List.of());
 		}
 
 		private List<Path> getOutputs() {
@@ -608,6 +608,8 @@ public class SBOMApplication implements IApplication {
 
 			addJRE(monitor);
 
+			loadSourceRepositories();
+
 			buildArtifactMappings();
 
 			var bom = new Bom();
@@ -647,7 +649,7 @@ public class SBOMApplication implements IApplication {
 					}
 				}
 			}
-			loadSourceRepositories();
+
 			// Gather details from the actual artifacts in parallel.
 			for (var entry : artifactIUs.entrySet()) {
 				var iu = entry.getValue();
@@ -715,24 +717,16 @@ public class SBOMApplication implements IApplication {
 			if (loaded.add(location)) {
 				try {
 					var artifactManager = getArtifactRepositoryManager();
-					var contains = artifactManager.contains(location);
 					var repository = artifactManager.loadRepository(location, new NullProgressMonitor());
 					artifactSourceRepositories
 							.add(new ArtifactSourceRepository(referenced == null ? location : referenced, repository));
-					if (!contains) {
-						artifactManager.removeRepository(location);
-					}
 					var metadataManager = getMetadataRepositoryManager();
-					contains = metadataManager.contains(location);
 					var references = metadataManager.loadRepository(location, new NullProgressMonitor())
 							.getReferences();
 					for (IRepositoryReference reference : references) {
 						if (reference.isEnabled()) {
 							loadArtifactSource(reference.getLocation(), location, loaded);
 						}
-					}
-					if (!contains) {
-						metadataManager.removeRepository(location);
 					}
 				} catch (Exception e) {
 					if (referenced == null) {
@@ -1071,8 +1065,25 @@ public class SBOMApplication implements IApplication {
 		private synchronized void loadSourceRepositories() {
 			if (artifactSourceRepositories == null && !p2ArtifactSourceRepositories.isEmpty()) {
 				artifactSourceRepositories = new ArrayList<>();
+
+				var artifactRepositories = Set
+						.of(artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL));
+				var metadataRepositories = Set
+						.of(metadataRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL));
+
 				for (String srcRepoUri : p2ArtifactSourceRepositories) {
 					loadArtifactSource(URI.create(srcRepoUri), null, new HashSet<>());
+				}
+
+				for (var uri : artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+					if (!artifactRepositories.contains(uri)) {
+						artifactRepositoryManager.removeRepository(uri);
+					}
+				}
+				for (var uri : metadataRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+					if (!metadataRepositories.contains(uri)) {
+						metadataRepositoryManager.removeRepository(uri);
+					}
 				}
 			}
 		}
