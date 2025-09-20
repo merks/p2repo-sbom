@@ -72,7 +72,8 @@ The p2 framework supports two types of repository, often colocated at the same U
     Each installable unit is uniquely identified by its ID and version.
 - Artifact 
   - This provides access to the actual physical artifacts, e.g., jars and binaries.
-    Each artifact is uniquely identified by its artifact key.
+    Each artifact is uniquely identified by its artifact key,
+    i.e., its classifier, ID, and version.
 
 ### p2 Engine
 
@@ -110,7 +111,7 @@ and given SBOM's primary focus on components as artifacts,
 it is beneficial to unify these two during the process of mapping p2 units and artifacts onto SBOM components.
 The components of a generated SBOM are classified as follows:
 
-### Bundle
+### Bundle Mapping
 
 A bundle unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It corresponds to both an installable unit as well as that unit's associated artifact.
@@ -135,10 +136,18 @@ It corresponds to both an installable unit as well as that unit's associated art
 The artifact is a jar representing an OSGi bundle.
 The jar may be unpacked when provisioned into an installation.
 
-### Feature
+The ID of the unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name) of the component.
+The version of the unit is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
+The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
+The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `binary/<ID>_<version>`,
+i.e., analogous to the default mapping of the artifact in the artifact repository.
+
+
+### Feature Mapping
 
 A feature unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It corresponds to a pair of installable units, `*.feature.group`/`*.feature.jar`,
+where `*` is the base ID,
 as well the units' associated artifact.
 ```
 <unit id='org.example.abc.feature.group' version='1.0.0.v20250601-000' singleton='false'>
@@ -185,7 +194,14 @@ It is a jar representing an Eclipse feature.
 The jar effectively just contains the `feature.xml` and therefore contributes no behavior to an actual running application.
 The feature jar will be unpacked when provisioned into an installation.
 
-### Binary
+The ID of the `*.feature.jar` unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name) of the component.
+The version of the units is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
+The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
+The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `features/<base-ID>_<version>.jar`,
+i.e., analogous to the default mapping of the artifact in an artifact repository.
+
+
+### Binary Mapping
 
 A binary unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It corresponds to both an installable unit as well as that unit's associated artifact.
@@ -226,10 +242,16 @@ For example,
 it can contain a native executable
 that will be assigned the appropriate POSIX permissions when placed at its intended destination.
 
+The ID of the unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name) of the component.
+The version of the unit is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
+The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
+The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `binary/<ID>_<version>`,
+i.e., analogous to the default mapping of the artifact in the artifact repository.
 
-### Metadata
 
-A metadata unit is a component of type <a href="https://cyclonedx.org/docs/1.6/json/#components_items_type">data</a>.
+### Metadata Mapping
+
+A metadata unit is a component of type [data](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It is a logical component for which no corresponding physical artifact exists.
 ```
 <unit id='toolingorg.example.abc.ini.gtk.linux.x86_64' version='1.0.0.v20250601-000' singleton='false'>
@@ -289,8 +311,89 @@ It exists only in a p2 metadata repository or in an installation profile,
 which is also logically a metadata p2 repository.
 It can specify dependencies on other components
 as well as touchpoints describing actions to be applied to artifacts as they are installed.
-For example, it may set program arguments or VM arguments in a product's <code>*.ini</code>.
+It contributes no behavior to an actual running application,
+but rather provides for the management of the configuration of that application.
 
+The ID of the unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name) of the component.
+The version of the unit is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
+The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
+The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `metadata/<ID>_<version>`.
+
+### Unit Properties
+
+The units of a metadata repository and artifact repository can specify additional named properties,
+i.e., key-value pairs,
+associated with that unit.
+Many of these are of interest when mapping a unit to a component.
+For example, a unit can specify the provider, the name, and a description,
+all of which are user-facing information about the unit.
+The provider of a unit, if specified,
+is mapped to the [publisher](https://cyclonedx.org/docs/1.6/json/#components_items_publisher) of the component.
+The name and the description, if specified, are combined
+and are mapped to the [description](https://cyclonedx.org/docs/1.6/json/#components_items_description) of the component.
+
+The properties can also specify details,
+e.g., the Maven coordinates of the unit,
+that are used in other aspects of the component mapping process.
+Some properties may even be mapped directly to [properties](https://cyclonedx.org/docs/1.6/json/#components_items_properties) of the component;
+this is the case only for properties that are not otherwise mapped
+or are not recognized to  be no of direct interest.
+
+### PURL
+
+A package URL specifies a [standardized identity](https://github.com/package-url/purl-spec) for each mapped component.
+Many of the artifacts (bundles) used by Eclipse applications originate from Maven Central.
+These can be identified by so-called `maven` type PURL as follows:
+```
+pkg:maven/<groupId>/<artifactId>@<version>
+```
+Other artifacts are available purely from a p2 repository.
+These can be identified using the [proposed](https://github.com/package-url/purl-spec/issues/271) `p2` type PURL as follows:
+```
+pkg:p2/<id>@<version>?classifier=<unit-classifier>&location=<repository-uri>
+```
+The mapping process of the CBI p2 SBOM generator specifies mappings for both metadata units and artifact units,
+with a primary focus on the artifacts.
+The generator associates a PURL with every mapped component.
+As mentioned previously,
+the unit properties often provide traceability detail such as the Maven coordinates of the artifact.
+If those are available,
+**and** the generator can confirm that the local artifact is indeed byte-for-byte identical to the artifact on Maven Central,
+a `maven` type PURL is associated with the component.
+Otherwise a `p2` type PURL is associated with the component where
+a bundle unit's classifier is `osg.bundle`,
+a feature unit's classifier is `org.eclipse.update.feature`,
+a binary unit's classifier is  `binary`,
+and a metadata unit's classifier is `metadata`.
+While metadata and artifact repositories are typically colocated,
+that's not always the case
+and for application installations,
+it's never the case.
+The `repository-uri` is generally the artifact repository URI,
+except for metadata units for which is is the metadata repository URI.
+
+#### Pedigree 
+
+Special care must be taking when associating a `maven` type PURL with an artifact.
+In particular,
+the SBOM consumer must be guaranteed that the hash sum of an artifact is in fact identical to the hash sum of the originating artifact on Maven Central.
+There are a number of reasons why this might not be the case,
+for example,
+BND instructions may be used to synthesize an OSGi-compatible `MANIFEST.MF` for the jar,
+thereby modifying the artifact.
+
+If a unit specifies Maven a coordinate,
+**and** an artifact exists for that coordinate **but** is the artifact not byte-for-byte identical,
+a `p2` type PURL is associated with the component.
+In addition,
+a [pedigree](https://cyclonedx.org/docs/1.6/json/#components_items_pedigree) is also associated with the component.
+The pedigree specifies the original Maven coordinates via the [ancestors](https://cyclonedx.org/docs/1.6/json/#components_items_pedigree_ancestors).
+I.e.,
+the ancestor is a nested component that specifies
+the `groupId` as the [group](https://cyclonedx.org/docs/1.6/json/#components_items_group),
+the `artifactId` as the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name),
+the `version` as the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version),
+and the `maven` type PURL as the [purl](https://cyclonedx.org/docs/1.6/json/#components_items_purl).
 
 ## Tycho SBOM
 
@@ -306,13 +409,14 @@ Applying this to the Eclipse Installer has provided a useful basis for comparing
 
 ### Under Construction
 
-The Tycho sboms don't properly use the bom-ref of the component for specifying dependencies using two different styles,
+The Tycho SBOMs don't properly use the bom-ref of the component for specifying dependencies but rather are using two different styles,
 either the pgk:maven or pkg:p2 for a given component.
-Also has references to components that don't exist, e.g., .source bundles.
+Also has references to components that don't exist, e.g., `*.source` bundles.
 In the end, we can't really even a hack a workaround because the SBOM does not contain the BSN of the component, only the maven coordinates.
-The Tycho sbom seem to have odd components that aren't actually in the product repository,
+The Tycho SBOMs seem to have odd components that aren't actually in the product repository,
 e.g., com.sun.xml.bind,
 probably as a result of resolving package requirements to all possible providers in the target platform,
-also lots of *.source bundles that aren't in the product.
-More care must be taken when generating PURLs that in fact the maven artifact has the same hash sums as the p2/local artifact.
+also lots of `*.source` bundles that aren't in the product.
+More care must be taken when generating PURLs that in fact the Maven artifact has the same hash sums as the p2/local artifact,
+i.e., is unmodified.
 
