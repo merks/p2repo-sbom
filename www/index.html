@@ -422,8 +422,9 @@
 		const bomProperties = new Map();
 		const componentExternalReferenceTypes = new Set();
 		const componentPropertyNames = new Set();
-		const p2Repositories = new Set();
-		const mavenRepositories = new Set();
+		const p2Repositories = new Map();
+		const mavenRepositories = new Map();
+		const ids = new Map();
 
 		function clear() {
 			componentMap.clear();
@@ -434,6 +435,7 @@
 			componentPropertyNames.clear();
 			p2Repositories.clear();
 			mavenRepositories.clear();
+			ids.clear();
 		}
 
 		function restore() {
@@ -554,20 +556,20 @@
 
 		function getArtifactURL(scheme, group, name, version, params) {
 			if (scheme == 'maven') {
-				const repositoryURL = params.get('repository_url');
-				let url = repositoryURL == null ? 'https://repo.maven.apache.org/maven2' : repositoryURL;
-				mavenRepositories.add(url);
-				url += '/' + group.replaceAll('.', '/') + '/' + name + '/' + version + '/' + name + '-' + version;
+				const repositoryURL = params.get('repository_url') || 'https://repo.maven.apache.org/maven2';
+				mavenRepositories.set(repositoryURL, (mavenRepositories.get(repositoryURL) || 0) + 1);
+				let url = repositoryURL + '/' + group.replaceAll('.', '/') + '/' + name + '/' + version + '/' + name + '-' + version;
 				const classifier = params.get('classifier')
 				if (classifier != null) {
 					url += '-' + classifier;
 				}
 				const type = params.get('type')
 				url += '.' + (type == null ? 'jar' : type);
-				return `<a href="${url}"><img src="download.svg"></a>`;
+				return `<a data-repository-url="${repositoryURL}" href="${url}"><img src="download.svg"></a>`;
 			} else if (scheme == 'p2') {
-				let url = params.get('location');
-				p2Repositories.add(url);
+				const repositoryURL = params.get('location');
+				p2Repositories.set(repositoryURL, (p2Repositories.get(repositoryURL) || 0) + 1);
+				let url = repositoryURL;
 				const classifier = params.get('classifier')
 				if (classifier == 'osgi.bundle') {
 					url += '/plugins/' + name + '_' + version + '.jar';
@@ -577,7 +579,7 @@
 					url += '/binary/' + name + '_' + version;
 				} else if (classifier == 'metadata') {
 				}
-				return `<a href="${url}"><img src="download.svg"></a>`;
+				return `<a data-repository-url="${repositoryURL}" href="${url}"><img src="download.svg"></a>`;
 			}
 			return '';
 		}
@@ -640,7 +642,8 @@ ${getAncestorElementDetail(ancestor)}
 
 		function getAncestorElementDetail(ancestor) {
 			const purl = getModelValue(ancestor, 'purl');
-			return getPurlContent(purl);
+			// Remove the PURL filter links.
+			return getPurlContent(purl).replaceAll(/ data-repository-url="[^"]+"/g, '');
 		}
 
 		function getReferenceElements(component) {
@@ -732,7 +735,8 @@ ${getPropertyElementDetail(property)}
 		}
 
 		function getClassName(value) {
-			const result = value.replaceAll('.', '-');
+			const result = value.replaceAll(/[.:/!]/g, '-');
+			ids.set(result, value);
 			return result;
 		}
 
@@ -1157,7 +1161,7 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 					continue;
 				}
 
-				if (id == 'property' || id == 'reference') {
+				if (id == 'property' || id == 'reference' || id == 'purl') {
 					const subfilterElements = filter.parentElement.querySelectorAll(`#${id}-filters *`);
 					for (const element of subfilterElements) {
 						if (element.localName == 'label') {
@@ -1170,13 +1174,14 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 				}
 
 				let count = 0;
-				const elements = document.querySelectorAll('.' + id);
+				const elements = id.startsWith('purl-') ? document.querySelectorAll(`a[data-repository-url="${ids.get(id.replace(/^purl-/, ''))}"]`) : document.querySelectorAll('.' + id);
 				for (const element of elements) {
-					setFiltered(element, !checked);
-					if (isShowing(element)) {
-						element.style.display = checked ? 'block' : 'none';
+					const effectiveElement = element.localName == 'a' ? element.parentElement : element;
+					setFiltered(effectiveElement, !checked);
+					if (isShowing(effectiveElement)) {
+						effectiveElement.style.display = checked ? 'block' : 'none';
 					}
-					const artifactDiv = element.parentElement?.parentElement?.parentElement;
+					const artifactDiv = effectiveElement.parentElement?.parentElement?.parentElement;
 					if (artifactDiv != null && !isFiltered(artifactDiv)) {
 						++count;
 					}
@@ -1437,6 +1442,15 @@ ${componentElements.join('\n')}
 `;
 			summary.style.display = 'block';
 
+			const repos = new Set();
+			for (const key of p2Repositories.keys()) {
+				repos.add(key)
+			}
+			for (const key of mavenRepositories.keys()) {
+				repos.add(key)
+			}
+
+			generatNestedFilters(repos, 'purl');
 			generatNestedFilters(componentPropertyNames, 'property');
 			generatNestedFilters(componentExternalReferenceTypes, 'reference');
 
@@ -1446,7 +1460,9 @@ ${componentElements.join('\n')}
 		}
 
 		function generateRepositories(repositories, type) {
-			return [...repositories].sort().map(url => `<span class="repository"><span class="purl-scheme">${type}</span> <a class="plain" href="${url}">${getFormattedHost(url)}</a></span>`).join('\n');
+			const keys = repositories.keys();
+			return [...keys].sort().map(url =>
+				`<span class="repository"><span class="purl-scheme">${type}</span> <a class="plain" href="${url}">${getFormattedHost(url)}</a> <span class="count">${repositories.get(url)}</span></span>`).join('\n');
 		}
 
 		function generatNestedFilters(keys, type) {
@@ -1456,7 +1472,7 @@ ${componentElements.join('\n')}
 				[...keys].sort().map(name => `
 <input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filterClick(event, this)" checked>
 <label for="${type}-${getClassName(name)}">${name}<span class="count"></span></label>
-` ).join('\n') + innerHTML;
+` ).join(type == 'purl' ? '<br>\n' : '\n') + innerHTML;
 
 			const total = document.querySelector(`label[for=${type}] span[data-total]`);
 			total.setAttribute('data-total', [...keys].map(key => `${type}-${getClassName(key)}`).join(' '));
@@ -1623,8 +1639,11 @@ ${componentElements.join('\n')}
 
 				<div>
 					<input class="filter" type="checkbox" id="purl" name="purl" onclick="filterClick(event, this)" checked>
-					<label for="purl"><img alt="" src="purl.svg"> PURLs<span class="count"></span></label>
+					<label for="purl"><img alt="" src="purl.svg"> PURLs<span class="count" data-total='*'></span></label>
 					<img onclick="popup('help-purl')" alt="help" src="help.svg">
+					<fieldset class="nested-filters" id="purl-filters">
+						<img onclick="popup('help-purl-filter')" alt="help" src="help.svg">
+					</fieldset>
 
 					<br>
 
@@ -1724,7 +1743,7 @@ ${componentElements.join('\n')}
 					</dl>
 					<hr>
 					<p id="enable-all-disable-all-row">
-						Double clicking an item in this row of filters will make it the only check-marked filter
+						Double clicking an item in this section of filters will make it the only check-marked filter
 						except if it's already the only check-marked filter,
 						in which case all filters will be check-marked.
 					</p>
@@ -1789,6 +1808,12 @@ ${componentElements.join('\n')}
 					Double clicking this item will make it the only check-marked child filter
 					except if it's already the only check-marked child filter,
 					in which case all child filters will be check-marked.
+				</p>
+			</div>
+
+			<div id="help-purl-filter" class="modal-popup-description">
+				<h3>PURL URL</h3>
+				<p data-copy="enable-all-disable-all-row">
 				</p>
 			</div>
 
