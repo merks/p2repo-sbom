@@ -52,7 +52,7 @@ as supported by the Eclipse Plug-in Development Environment,
 - A [plug-in](https://help.eclipse.org/latest/index.jsp?topic=%2Forg.eclipse.pde.doc.user%2Fconcepts%2Fplugin.htm)
   is effectively just a synonym for a bundle.
 - A [fragment](https://help.eclipse.org/latest/index.jsp?topic=%2Forg.eclipse.pde.doc.user%2Fconcepts%2Ffragment.htm&cp%3D4_1_2)
-  is a special type of bundle that extends a so-call host bundle, typically with a platform-native implementation.
+  is a special type of bundle that extends a so-called host bundle, typically with a platform-native implementation.
 - A [feature](https://help.eclipse.org/latest/index.jsp?topic=%2Forg.eclipse.pde.doc.user%2Fconcepts%2Ffeature.htm&cp%3D4_1_1)
   is a collection of dependencies on plug-ins, fragments, and other features.
   It is intended as a user-facing unit that provides support for some high-level functionality that the user may choose to install in an application
@@ -65,10 +65,10 @@ All these building blocks are mapped onto p2 and made available via p2 repositor
 
 The p2 framework supports two types of repository, often colocated at the same URL:
 - Metadata 
-  - This provide access to
+  - This provides access to
     [installable units](https://eclipse.dev/eclipse/markdown/?file=eclipse-equinox/p2master/docs/Installable_Units.md)
     which specify metadata about all the units available for provisioning an application,
-    including the unit's provided capabilities as well as it's required capabilities.
+    including the unit's provided capabilities as well as its required capabilities.
     Each installable unit is uniquely identified by its ID and version.
 - Artifact 
   - This provides access to the actual physical artifacts, e.g., jars and binaries.
@@ -79,7 +79,7 @@ The p2 framework supports two types of repository, often colocated at the same U
 
 When an application is installed or updated by the p2 engine,
 a request to add, remove, or update installable units is specified,
-and one or more metadata repositories is made available to satisfy that request.
+and one or more metadata repositories are made available to satisfy that request.
 The engine builds a so-called plan using
 [sat4j](https://www.sat4j.org/)
 and then executes that plan.
@@ -109,7 +109,7 @@ making it possible to generate an SBOM for p2 repositories and for Eclipse insta
 Given the typical close correspondence between installable unit and artifact,
 and given SBOM's primary focus on components as artifacts,
 it is beneficial to unify these two during the process of mapping p2 units and artifacts onto SBOM components.
-The components of a generated SBOM are classified as follows:
+The components of a generated SBOM are mapped as follows:
 
 ### Bundle Mapping
 
@@ -139,16 +139,16 @@ The jar may be unpacked when provisioned into an installation.
 The ID of the unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name) of the component.
 The version of the unit is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
 The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
-The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `binary/<ID>_<version>`,
+The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `plugins/<ID>_<version>.jar`,
 i.e., analogous to the default mapping of the artifact in the artifact repository.
 
 
 ### Feature Mapping
 
 A feature unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
-It corresponds to a pair of installable units, `*.feature.group`/`*.feature.jar`,
+It corresponds to a pair of installable units, `*.feature.group` and `*.feature.jar`,
 where `*` is the base ID,
-as well the units' associated artifact.
+as well the units' associated artifact ID.
 ```
 <unit id='org.example.abc.feature.group' version='1.0.0.v20250601-000' singleton='false'>
   <update id='org.example.abc.feature.group' range='[0.0.0,1.0.0.v20250601-000)' severity='0'/>
@@ -337,7 +337,7 @@ e.g., the Maven coordinates of the unit,
 that are used in other aspects of the component mapping process.
 Some properties may even be mapped directly to [properties](https://cyclonedx.org/docs/1.6/json/#components_items_properties) of the component;
 this is the case only for properties that are not otherwise mapped
-or are not recognized to  be no of direct interest.
+or are not recognized to be no of direct interest.
 
 ### PURL
 
@@ -370,9 +370,9 @@ that's not always the case
 and for application installations,
 it's never the case.
 The `repository-uri` is generally the artifact repository URI,
-except for metadata units for which is is the metadata repository URI.
+except for metadata units for which it is the metadata repository URI.
 
-#### Pedigree 
+### Pedigree 
 
 Special care must be taking when associating a `maven` type PURL with an artifact.
 In particular,
@@ -383,7 +383,7 @@ BND instructions may be used to synthesize an OSGi-compatible `MANIFEST.MF` for 
 thereby modifying the artifact.
 
 If a unit specifies Maven a coordinate,
-**and** an artifact exists for that coordinate **but** is the artifact not byte-for-byte identical,
+**and** an artifact exists for that coordinate **but** the artifact is not byte-for-byte identical,
 a `p2` type PURL is associated with the component.
 In addition,
 a [pedigree](https://cyclonedx.org/docs/1.6/json/#components_items_pedigree) is also associated with the component.
@@ -394,6 +394,100 @@ the `groupId` as the [group](https://cyclonedx.org/docs/1.6/json/#components_ite
 the `artifactId` as the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name),
 the `version` as the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version),
 and the `maven` type PURL as the [purl](https://cyclonedx.org/docs/1.6/json/#components_items_purl).
+
+### Hashes
+
+[Hash sums](https://cyclonedx.org/docs/1.6/json/#components_items_hashes_items_content) are computed for each mapped component with an associated artifact
+using the [algorithms](https://cyclonedx.org/docs/1.6/json/#components_items_hashes_items_alg)
+`MD5`, `SHA-1`, `SHA-256`, `SHA-512`, `SHA-384` and `SHA3-256`.
+Hash sums are not computed for [metadata](#metadata-mapping) units.
+As mentioned previously,
+artifacts may be unpacked when installed.
+The p2 framework will automatically zip such artifacts as needed for an artifact request.
+The resulting artifact is generally not byte-for-byte identical to the original artifact in the originating p2 repository
+and will therefore have different hash sums.
+
+### Licenses
+
+[Licenses](https://cyclonedx.org/docs/1.6/json/#components_items_licenses) are computed on an ad hoc basis for each mapped component.
+There are **many** available sources of potential license information.
+- The p2 license metadata.
+- The OSGi `MANIFEST.MF` `Bundle-License` header.
+- The `license` element in a POM.
+- Various embedded license documents in the artifact, e.g., `about.html`.
+
+Often this information is recorded in a poorly standardized way, making reliable extraction by the CBI p2 SBOM generator an ongoing challenge.
+
+### Details
+
+As described in the [Unit Properties](#unit-properties) section,
+the [publisher](https://cyclonedx.org/docs/1.6/json/#components_items_publisher)
+and [description](https://cyclonedx.org/docs/1.6/json/#components_items_description) of the component
+(which also encoded the human-readable name)
+are presented as details in the SBOM renderer.
+
+### Properties
+As described in the [Unit Properties](#unit-properties) section,
+most unit properties are mapped to various aspects of the SBOM.
+Some properties may be mapped to component [properties](https://cyclonedx.org/docs/1.6/json/#components_items_properties)
+if they represent information not otherwise mapped and not recognized to be no of direct interest.
+
+The CBI p2 SBOM generator also captures some additional information as component properties.
+
+#### Clearly Defined 
+
+The generator will attempt to query the following URI:
+
+`https://api.clearlydefined.io/definitions/maven/mavencentral/<groupId>/<artifactId>/<version>`
+
+If that returns license details, 
+the generator will record the license expression as `clearly-defined`.
+This is the behavior for the current prototype and will be integrated with the [license](#licenses) in the longer term.
+
+#### Touchpoint
+
+The generator will record a unit's touchpoints, if present, as a `touchpoint` property.
+
+### External References
+
+[External references](https://cyclonedx.org/docs/1.6/json/#components_items_externalReferences) are computed for each mapped component on a best-effort basis.
+There are **many** available sources of potential external reference information:
+- The p2 `org.eclipse.equinox.p2.doc.url` metadata.
+- The OSGi `MANIFEST.MF` `Bundle-DocURL`, `Bundle-SCM`, and `Eclipse-SourceReferences` headers.
+- The various elements, e.g., `connection`, in a POM.
+
+### Dependencies
+
+As mentioned previously,
+there is a significant impedance mismatch between the concept of OSGi/p2 requirements
+versus the concept of SBOM [dependencies](https://cyclonedx.org/docs/1.6/json/#dependencies).
+The CBI p2 SBOM generator will generate a [dependency reference](https://cyclonedx.org/docs/1.6/json/#dependencies_items_ref) from each component
+to the zero or more components that it [depends on](https://cyclonedx.org/docs/1.6/json/#dependencies_items_dependsOn).
+This is accomplished by resolving the requirements of the component's corresponding unit(s)
+to the corresponding component(s) of the unit(s) that provide a capability that satisfies that requirement.
+As such,
+while a unit's requirement may be satisfied by an unbounded number of potential capability providers,
+the generator will limit resolution to those available in the SBOM.
+To avoid losing potentially-important dependency information about unsatisfied requirements,
+any such a requirement is recorded as an `unsatisfied-requirement` [property](#properties) on the corresponding component.
+
+From this perspective, it should be clear that the quality of the generator's dependency information is effectively limited by a closed-universe assumption.
+In other words,
+it should be noted that the dependency information of an SBOM generated from a p2 repository for which all requirements **do not** transitively resolve is of limited utility.
+
+From the point of view of managing and tracking [Common Vulnerabilities and Exposures](https://www.cve.org/), CVEs,
+the actual details of the unit's requirement provide significantly more value than is captured in the SBOM dependencies.
+Specifically,
+suppose that a new version of some library that addresses some CVE becomes available,
+the question of whether that library's version is such that it can be substituted,
+i.e., lies with the permissible version range,
+becomes highly significant,
+and this cannot be answered by the details in the SBOM itself.
+
+Although the SBOM represents dependencies in only one direction, 
+the SBOM renderer shows dependencies both directions,
+i.e., both incoming and outgoing dependencies.
+
 
 ## Tycho SBOM
 
@@ -419,4 +513,3 @@ probably as a result of resolving package requirements to all possible providers
 also lots of `*.source` bundles that aren't in the product.
 More care must be taken when generating PURLs that in fact the Maven artifact has the same hash sums as the p2/local artifact,
 i.e., is unmodified.
-
