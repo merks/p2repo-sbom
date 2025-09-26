@@ -179,6 +179,29 @@ org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]gro
 """),
 ]
 
+def  simRelStagingProductsWithP2SourceRepository  = [
+  label: 'EPP 2025-12 Staging Products with P2 Sources',
+  BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-12 Staging Products with P2 Source repository references.',
+  SCP: "technology/epp/staging/*.zip technology/epp/staging/*.tar.gz",
+  ARGS: pretty("""
+-redirections
+local-target->https://download.eclipse.org/technology/epp/staging/
+-installations
+local-target
+-strict-p2-source-repositories
+-p2sources
+https://download.eclipse.org/staging/2025-12/
+-expected-missing-artifact-iu-patterns
+org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]group:.*
+-xml-outputs
+.
+-json-outputs
+.
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
 def parambuilds = [
   eclipseMilestoneInstaller,
   eclipseMilestoneInstallers,
@@ -189,6 +212,7 @@ def parambuilds = [
   epp2025_09_R_products,
   simRelStaging,
   simRelStagingProducts,
+  simRelStagingProductsWithP2SourceRepository,
 ]
 
 def defaultBuild = eclipseMilestoneInstaller
