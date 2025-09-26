@@ -198,6 +198,14 @@ public class SBOMApplication implements IApplication {
 		var installationsFolder = getArgument("-installations", args, null);
 		var verbose = getArgument("-verbose", args);
 		SBOMApplication.queryCentral = getArgument("-central-search", args);
+
+		var byteCache = args.contains("-strict-p2-source-repositories")
+				? Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.byte-cache")
+				: null;
+		if (byteCache != null) {
+			byteCache.toFile().deleteOnExit();
+		}
+
 		if (installationsFolder != null) {
 			var installationPattern = Pattern
 					.compile(getArgument("-installation-pattern", args, ".*\\.(zip|tar|tar.gz)$"));
@@ -221,6 +229,10 @@ public class SBOMApplication implements IApplication {
 						effectiveArgs.add("-json-output");
 						effectiveArgs.add(jsonOutputsFolder + "/"
 								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.json"));
+					}
+					if (byteCache != null) {
+						effectiveArgs.add("-byte-cache");
+						effectiveArgs.add(byteCache.toString());
 					}
 					sbomGeneratorResults.add(new SBOMGenerator(effectiveArgs).run());
 				}
@@ -399,6 +411,8 @@ public class SBOMApplication implements IApplication {
 
 		private final List<String> p2ArtifactSourceRepositories = new ArrayList<>();
 
+		private final boolean strictSourceRepositories;
+
 		private final List<IInstallableUnit> inclusiveContextIUs = new ArrayList<>();
 
 		private final List<IInstallableUnit> exclusiveContextIUs = new ArrayList<>();
@@ -408,6 +422,8 @@ public class SBOMApplication implements IApplication {
 		private final Map<URI, URI> uriRedirections;
 
 		private final List<Path> outputs = new ArrayList<>();
+
+		private final ByteCache byteCache;
 
 		private final ContentHandler contentHandler;
 
@@ -465,11 +481,14 @@ public class SBOMApplication implements IApplication {
 			artifactRepositoryURIs
 					.addAll(getArguments("-artifact", args, List.of()).stream().map(URI::create).toList());
 			p2ArtifactSourceRepositories.addAll(getArguments("-p2sources", args, List.of()));
+			strictSourceRepositories = getArgument("-strict-p2-source-repositories", args);
 
 			xmlOutput = getArgument("-xml-output", args, null);
 			jsonOutput = getArgument("-json-output", args, null);
 			json = getArgument("-json", args);
 			xml = getArgument("-xml", args) || !json && xmlOutput == null && jsonOutput == null;
+
+			byteCache = new ByteCache(getArgument("-byte-cache", args, null));
 		}
 
 		private List<Path> getOutputs() {
@@ -1039,19 +1058,71 @@ public class SBOMApplication implements IApplication {
 				}
 			}
 
-			var location = getRedirectedURI(
-					isMetadata(artifactDescriptor) ? URI.create(artifactDescriptor.getProperty("location"))
-							: getArtifactLocation(artifactDescriptor));
 			var artifactKey = artifactDescriptor.getArtifactKey();
+			var basicLocation = isMetadata(artifactDescriptor) ? URI.create(artifactDescriptor.getProperty("location"))
+					: getArtifactLocation(artifactDescriptor);
+			if (strictSourceRepositories) {
+				var sourceArtifactDescriptor = ArtifactSourceRepository.getSourceArtifactDescriptor(artifactDescriptor,
+						artifactSourceRepositories);
+				if (sourceArtifactDescriptor != null) {
+					try {
+						var uri = sourceArtifactDescriptor.getRepository().getLocation()
+								.resolve("./" + artifactKey.getClassifier() + "-" + artifactKey.getId() + "-"
+										+ artifactKey.getVersion());
+						var sourceBytes = byteCache.getBytes(uri, it -> {
+							var out = new ByteArrayOutputStream();
+							sourceArtifactDescriptor.getRepository().getRawArtifact(sourceArtifactDescriptor, out,
+									new NullProgressMonitor());
+							return out.toByteArray();
+						});
+
+						if (Arrays.equals(bytes, sourceBytes)) {
+							basicLocation = sourceArtifactDescriptor.getRepository().getLocation();
+						} else {
+							var zipContents = IOUtil.getZipContents(bytes);
+							var sourceZipContents = IOUtil.getZipContents(bytes);
+							if (equals(zipContents, sourceZipContents)) {
+								basicLocation = sourceArtifactDescriptor.getRepository().getLocation();
+							}
+						}
+					} catch (IOException e) {
+						throw new RuntimeException(e);
+					}
+				}
+			}
+
+			var location = getRedirectedURI(basicLocation);
 			var encodedLocation = urlEncodeQueryParameter(location.toString());
 			var purl = "pkg:p2/" + artifactKey.getId() + "@" + artifactKey.getVersion() + "?classifier="
 					+ artifactKey.getClassifier() + "&location=" + encodedLocation;
 			component.setPurl(purl);
 		}
 
+		private boolean equals(Map<String, byte[]> zip1, Map<String, byte[]> zip2) {
+			for (var key : zip1.keySet()) {
+				if (!zip2.containsKey(key)) {
+					return false;
+				}
+			}
+			for (var key : zip2.keySet()) {
+				if (!zip1.containsKey(key)) {
+					return false;
+				}
+			}
+			for (var entry : zip1.entrySet()) {
+				var bytes2 = zip2.get(entry.getKey());
+				if (bytes2 != null) {
+					if (!Arrays.equals(entry.getValue(), bytes2)) {
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
 		private URI getArtifactLocation(IArtifactDescriptor artifactDescriptor) {
 			// First see if there are any explicitly configured source repositories
-			if (!p2ArtifactSourceRepositories.isEmpty()) {
+			if (!strictSourceRepositories && !p2ArtifactSourceRepositories.isEmpty()) {
 				for (ArtifactSourceRepository repository : artifactSourceRepositories) {
 					if (repository.contains(artifactDescriptor)) {
 						return repository.uri();
@@ -1062,7 +1133,7 @@ public class SBOMApplication implements IApplication {
 			return artifactDescriptor.getRepository().getLocation();
 		}
 
-		private synchronized void loadSourceRepositories() {
+		private void loadSourceRepositories() {
 			if (artifactSourceRepositories == null && !p2ArtifactSourceRepositories.isEmpty()) {
 				artifactSourceRepositories = new ArrayList<>();
 
@@ -1963,6 +2034,41 @@ public class SBOMApplication implements IApplication {
 		}
 	}
 
+	public static class ByteCache {
+
+		private final Path cache;
+
+		public ByteCache(String cache) {
+			this.cache = cache == null ? null : Path.of(cache).toAbsolutePath();
+		}
+
+		interface Reader {
+			byte[] read(URI uri) throws IOException;
+		}
+
+		public byte[] getBytes(URI uri, Reader reader) throws IOException {
+			if (cache == null) {
+				return reader.read(uri);
+			}
+
+			var path = getCachePath(uri);
+			if (Files.isRegularFile(path)) {
+				return Files.readAllBytes(path);
+			}
+			Files.createDirectories(path.getParent());
+			var bytes = reader.read(uri);
+			Files.write(path, bytes);
+			return bytes;
+		}
+
+		private Path getCachePath(URI uri) {
+			var decodedURI = URLDecoder.decode(uri.toString(), StandardCharsets.UTF_8);
+			var uriSegments = decodedURI.split("[:/?#&;]+");
+			var result = cache.resolve(String.join("/", uriSegments));
+			return result;
+		}
+	}
+
 	public static class ContentHandler {
 
 		public static class ContentHandlerException extends IOException {
@@ -2305,6 +2411,19 @@ public class SBOMApplication implements IApplication {
 		private IOUtil() {
 		}
 
+		public static Map<String, byte[]> getZipContents(byte[] bytes) throws IOException {
+			var entries = new TreeMap<String, byte[]>();
+			try (var zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
+				for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+					if (!entry.isDirectory()) {
+						var name = entry.getName();
+						entries.put(name, zip.readAllBytes());
+					}
+				}
+				return entries;
+			}
+		}
+
 		public static Path extractInstallation(Path archive) throws IOException {
 			var fileName = archive.getFileName().toString();
 			var matcher = SUPPORTED_ARCHIVE_PATTERN.matcher(fileName);
@@ -2351,13 +2470,13 @@ public class SBOMApplication implements IApplication {
 		}
 
 		private static void extractZip(InputStream in, Path target) throws IOException {
-			try (var tar = new ZipInputStream(in)) {
-				for (var entry = tar.getNextEntry(); entry != null; entry = tar.getNextEntry()) {
+			try (var zip = new ZipInputStream(in)) {
+				for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
 					var path = target.resolve(entry.getName());
 					if (entry.isDirectory()) {
 						Files.createDirectory(path);
 					} else {
-						Files.copy(tar, path);
+						Files.copy(zip, path);
 					}
 				}
 			}
@@ -2426,11 +2545,29 @@ public class SBOMApplication implements IApplication {
 
 	private static final record ArtifactSourceRepository(URI uri, IArtifactRepository repository) {
 
+		public static IArtifactDescriptor getSourceArtifactDescriptor(IArtifactDescriptor artifactDescriptor,
+				Collection<? extends ArtifactSourceRepository> repositories) {
+			if (repositories != null) {
+				for (var repository : repositories) {
+					var sourceArtifactDescriptor = repository.getSourceArtifactDescriptor(artifactDescriptor);
+					if (sourceArtifactDescriptor != null) {
+						return sourceArtifactDescriptor;
+					}
+				}
+			}
+			return null;
+		}
+
+		public IArtifactDescriptor getSourceArtifactDescriptor(IArtifactDescriptor otherDescriptor) {
+			var descriptors = repository.getArtifactDescriptors(otherDescriptor.getArtifactKey());
+			return descriptors.length == 0 ? null : descriptors[0];
+		}
+
 		public boolean contains(IArtifactDescriptor otherDescriptor) {
 			var descriptors = repository.getArtifactDescriptors(otherDescriptor.getArtifactKey());
 			if (descriptors.length > 0) {
 				var otherProperties = otherDescriptor.getProperties();
-				for (IArtifactDescriptor descriptor : descriptors) {
+				for (var descriptor : descriptors) {
 					var thisProperties = descriptor.getProperties();
 					// we want at least one checksum to match!
 					if (thisProperties.keySet().stream().filter(key -> key.startsWith("download.checksum."))
@@ -2446,6 +2583,5 @@ public class SBOMApplication implements IApplication {
 			}
 			return false;
 		}
-
 	}
 }
