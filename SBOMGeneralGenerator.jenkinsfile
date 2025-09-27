@@ -256,8 +256,8 @@ pipeline {
 
   environment {
     BUILD_TIME_STAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M').trim()
-    BASE_STORAGE_LOCATION = '/home/data/htt
-    PUBLISH_RELATIVE_LOCATION = 'cbi/archive/sboms'pd/download.eclipse.org'
+    BASE_STORAGE_LOCATION = '/home/data/httpd/download.eclipse.org'
+    PUBLISH_RELATIVE_LOCATION = 'cbi/archive/sboms'
     PUBLISH_STORAGE_LOCATION = "${env.BASE_STORAGE_LOCATION}/${env.PUBLISH_RELATIVE_LOCATION}"
     GENIE = 'genie.cbi'
     SCP_PREFIX = " $GENIE@projects-storage.eclipse.org:$BASE_STORAGE_LOCATION/"
