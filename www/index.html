@@ -108,10 +108,12 @@
 		.property,
 		.reference,
 		.ancestor,
+		.jar,
 		.detail {
 			margin-left: 1.5em;
 		}
 
+		.jar .label-name,
 		.incoming-dependency .label-version,
 		.incoming-dependency .label-name,
 		.incoming-dependency .label-group,
@@ -153,6 +155,16 @@
 		.label-group {
 			color: darkcyan;
 			font-size: 80%;
+		}
+
+		.pedigree-notes b {
+			color: firebrick;
+			font-size: 120%;
+		}
+
+		.pedigree-notes {
+			font-size: 80%;
+			opacity: 60%;
 		}
 
 		.purl-scheme {
@@ -628,16 +640,75 @@ ${artifactURL}`;
 			}
 		}
 
+		function getNestedComponentElements(component) {
+			const components = getModelValue(component, 'components');
+			if (components != null) {
+				return components.map(component => `<div class="jar" style="display:none">
+<img class="icon" src="jar.svg">
+${getNestedComponentElementDetail(component)}
+</div> `);
+			}
+			return [];
+		}
+
+		function getNestedComponentElementDetail(component) {
+			const purl = getModelValue(component, 'purl');
+			if (purl == null) {
+				const name = getModelValue(component, 'name');
+				const pedigree = getModelValue(component, 'pedigree');
+				const purls = [];
+				if (pedigree != null) {
+					const notes = getModelValue(pedigree, 'notes');
+					const ancestors = getModelValue(pedigree, 'ancestors', []);
+					for (const ancestor of ancestors) {
+						purls.push(`
+${getAncestorElementDetail(ancestor)}
+${getFormattedNotes(notes)}
+`);
+					}
+				}
+				return `<span class="label-name">${name}</span> ${purls.join(' ')}`;
+			}
+			// Remove the PURL filter links.
+			return getPurlContent(purl).replaceAll(/ data-repository-url="[^"]+"/g, '');
+		}
+
 		function getPedigreeElements(component) {
 			const pedigree = getModelValue(component, 'pedigree');
 			if (pedigree != null) {
+				const notes = getModelValue(pedigree, 'notes');
 				const ancestors = getModelValue(pedigree, 'ancestors', []);
 				return ancestors.map(ancestor => `<div class="ancestor" style="display:none">
 <img class="icon" src="ancestor.svg">
 ${getAncestorElementDetail(ancestor)}
-				</div > `);
+${getFormattedNotes(notes)}
+</div> `);
 			}
 			return [];
+		}
+
+		function getFormattedNotes(notes) {
+			if (notes == null) {
+				return '';
+			}
+			let processedNotes = notes;
+			if (/^((Added |Removed |Modified )[^,]+((, Added |, Removed |, Modified )[^,]+)*)$/.test(notes)) {
+				const changes = notes.split(", ");
+				const length = changes.length;
+				const end = Math.min(12, length);
+				const limitedChanges = changes.slice(0, end);
+				if (end < length) {
+					limitedChanges.push("<b>&hellip;</b>");
+				}
+				processedNotes = limitedChanges.
+					map(change => change.replaceAll('Modified ', '<b>\u0394</b> ').replaceAll('Added ', '<b>+</b> ').replaceAll('Removed ', '<b>\u2212</b> ')).join(', ')
+			} else {
+				if (notes.length > 200) {
+					processedNotes = notes.substring(0, 200) + '&hellip;';
+				}
+				console.log("!" + notes);
+			}
+			return `<span class="pedigree-notes" title="${notes}">&nbsp;&nbsp;${processedNotes}<span>`;
 		}
 
 		function getAncestorElementDetail(ancestor) {
@@ -1398,6 +1469,7 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 			const componentElements = components.map(component => {
 				const purlElements = getPurlElement(component);
 				const pedigreeElements = getPedigreeElements(component);
+				const nestedComponentElements = getNestedComponentElements(component);
 				const licenseElements = getLicenseElements(component);
 				const hashElements = getHashElements(component);
 				const propertyElements = getPropertyElements(component);
@@ -1410,6 +1482,7 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 ${generateButton()}<span class="label">&nbsp;${getComponentIcon(component)} ${getComponentLabel(component)}<span>
 ${purlElements.join('\n')}
 ${pedigreeElements.join('\n')}
+${nestedComponentElements.join('\n')}
 ${licenseElements.join('\n')}
 ${hashElements.join('\n')}
 ${propertyElements.join('\n')}
@@ -1653,6 +1726,12 @@ ${componentElements.join('\n')}
 
 					<br>
 
+					<input class="filter" type="checkbox" id="jar" name="jar" onclick="filterClick(event, this)" checked>
+					<label for="jar"><img alt="" src="jar.svg"> Nested Jars<span class="count"></span></label>
+					<img onclick="popup('help-jar')" alt="help" src="help.svg">
+
+					<br>
+
 					<input class="filter" type="checkbox" id="hash" name="hash" onclick="filterClick(event, this)" checked>
 					<label for="hash"><img alt="" src="hash.svg"> Hash Sums<span class="count"></span></label>
 					<img onclick="popup('help-hashsum')" alt="help" src="help.svg">
@@ -1840,6 +1919,23 @@ ${componentElements.join('\n')}
 					before generating a PURL reference to the Maven Central artifact.
 					When they do not match exactly,
 					the pedigree captures the derivation link.
+				</p>
+				<hr>
+				<p data-copy="enable-all-disable-all">
+				</p>
+			</div>
+
+			<div id="help-jar" class="modal-popup-description">
+				<h3>Nested Jars</h3>
+				<p>
+					In some cases a bundle may embed one or more jars and place them on the
+					<a href="https://docs.osgi.org/specification/osgi.core/8.0.0/framework.module.html#framework.module.bundleclasspath">bundle's classpath</a>.
+					Such jars are represented as
+					<a href="https://cyclonedx.org/docs/1.6/json/#components_items_components">nested components</a>.
+				</p>
+				<p>
+					The CBI SBOM generator will attempt map each such jar to and artifact available on Maven Central.
+					The same underlying mechanism as used for predigree tracking of bundles is applied for any jar that can be successfully traced to Maven Central.
 				</p>
 				<hr>
 				<p data-copy="enable-all-disable-all">

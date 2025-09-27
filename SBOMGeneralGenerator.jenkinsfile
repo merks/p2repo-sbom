@@ -8,6 +8,8 @@ def  eclipseMilestoneInstaller = [
   BUILD_DESCRIPTION: 'Build the SBOM for the Eclipse Installer Milestone Repository',
   SCP: "",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -input
 https://download.eclipse.org/oomph/products/repository
 -requirement-exclusions
@@ -26,6 +28,8 @@ def  eclipseMilestoneInstallers  = [
   BUILD_DESCRIPTION: 'Build the SBOMs all for the Eclipse Milestone Installers',
   SCP: "oomph/products/*.zip oomph/products/*.tar.gz",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -redirections
 local-target->https://download.eclipse.org/oomph/products/
 -installations
@@ -44,6 +48,8 @@ def  eclipse436SDKs  = [
   BUILD_DESCRIPTION: 'Build the SBOMs for all the Eclipse 4.36 SDKs',
   SCP: "eclipse/downloads/drops4/R-4.36-202505281830/eclipse-SDK-*.zip eclipse/downloads/drops4/R-4.36-202505281830/eclipse-SDK-*.tar.gz",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -redirections
 local-target->https://download.eclipse.org/eclipse/downloads/drops4/R-4.36-202505281830/
 -installations
@@ -62,6 +68,8 @@ def  eclipse437SDK  = [
   BUILD_DESCRIPTION: 'Build the SBOM for all the Eclipse 4.37 SDK Repository',
   SCP: "",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -input
 https://download.eclipse.org/eclipse/updates/4.37/R-4.37-202509050730
 -xml-output
@@ -79,6 +87,8 @@ def  eclipse437SDKs  = [
   BUILD_DESCRIPTION: 'Build the SBOMs for all the Eclipse 4.37 SDKs',
   SCP: "eclipse/downloads/drops4/R-4.37-202509050730/eclipse-SDK-*.zip eclipse/downloads/drops4/R-4.37-202509050730/eclipse-SDK-*.tar.gz",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -redirections
 local-target->https://download.eclipse.org/eclipse/downloads/drops4/R-4.37-202509050730/
 -installations
@@ -97,6 +107,8 @@ def  simRel2025_09  = [
   BUILD_DESCRIPTION: 'Build the SBOMs for the SimRel 2025-09 repository',
   SCP: "",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -input
 https://download.eclipse.org/releases/2025-09
 -requirement-exclusions
@@ -120,6 +132,8 @@ def  epp2025_09_R_products  = [
   BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-09 R Products.',
   SCP: "technology/epp/downloads/release/2025-09/R/*.zip technology/epp/downloads/release/2025-09/R/*.tar.gz",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -redirections
 local-target->https://download.eclipse.org/technology/epp/downloads/release/2025-09/R/
 -installations
@@ -140,6 +154,8 @@ def  simRelStaging  = [
   BUILD_DESCRIPTION: 'Build the SBOMs for the SimRel 2025-12 Staging Repository',
   SCP: "",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -input
 https://download.eclipse.org/staging/2025-12
 https://download.eclipse.org/technology/epp/staging/repository
@@ -164,6 +180,8 @@ def  simRelStagingProducts  = [
   BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-12 Staging Products.',
   SCP: "technology/epp/staging/*.zip technology/epp/staging/*.tar.gz",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -redirections
 local-target->https://download.eclipse.org/technology/epp/staging/
 -installations
@@ -184,6 +202,8 @@ def  simRelStagingProductsWithP2SourceRepository  = [
   BUILD_DESCRIPTION: 'Build the SBOMs all for the EPP 2025-12 Staging Products with P2 Source repository references.',
   SCP: "technology/epp/staging/*.zip technology/epp/staging/*.tar.gz",
   ARGS: pretty("""
+-central-search
+-process-bundle-classpath
 -redirections
 local-target->https://download.eclipse.org/technology/epp/staging/
 -installations
@@ -191,6 +211,8 @@ local-target
 -strict-p2-source-repositories
 -p2sources
 https://download.eclipse.org/staging/2025-12/
+https://download.eclipse.org/technology/epp/staging/repository/
+https://download.eclipse.org/justj/epp/milestone/latest/
 -expected-missing-artifact-iu-patterns
 org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]group:.*
 -xml-outputs
@@ -234,8 +256,8 @@ pipeline {
 
   environment {
     BUILD_TIME_STAMP = sh(returnStdout: true, script: 'date +%Y%m%d_%H%M').trim()
-    BASE_STORAGE_LOCATION = '/home/data/httpd/download.eclipse.org'
-    PUBLISH_RELATIVE_LOCATION = 'cbi/archive/sboms'
+    BASE_STORAGE_LOCATION = '/home/data/htt
+    PUBLISH_RELATIVE_LOCATION = 'cbi/archive/sboms'pd/download.eclipse.org'
     PUBLISH_STORAGE_LOCATION = "${env.BASE_STORAGE_LOCATION}/${env.PUBLISH_RELATIVE_LOCATION}"
     GENIE = 'genie.cbi'
     SCP_PREFIX = " $GENIE@projects-storage.eclipse.org:$BASE_STORAGE_LOCATION/"
