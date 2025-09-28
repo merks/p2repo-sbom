@@ -93,6 +93,7 @@ import org.cyclonedx.generators.BomGeneratorFactory;
 import org.cyclonedx.generators.xml.BomXmlGenerator;
 import org.cyclonedx.model.Ancestors;
 import org.cyclonedx.model.Annotation;
+import org.cyclonedx.model.AttachmentText;
 import org.cyclonedx.model.Bom;
 import org.cyclonedx.model.Component;
 import org.cyclonedx.model.Component.Scope;
@@ -104,6 +105,10 @@ import org.cyclonedx.model.License;
 import org.cyclonedx.model.LicenseChoice;
 import org.cyclonedx.model.Pedigree;
 import org.cyclonedx.model.Property;
+import org.cyclonedx.model.component.data.ComponentData;
+import org.cyclonedx.model.component.data.ComponentData.ComponentDataType;
+import org.cyclonedx.model.component.data.Content;
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
 import org.eclipse.core.runtime.MultiStatus;
@@ -1090,7 +1095,20 @@ public class SBOMApplication implements IApplication {
 
 			var touchpointDetails = getTouchpointDetails(iu);
 			if (touchpointDetails != null) {
+				// Note that touchpoints are not necessarily only on metadata components.
 				component.addProperty(createProperty("touchpoint", touchpointDetails));
+
+				// Also represent this as data since components of type data are generally
+				// expected to have data.
+				var data = new ComponentData();
+				data.setType(ComponentDataType.CONFIGURATION);
+				var content = new Content();
+				var attachmentText = new AttachmentText();
+				attachmentText.setContentType("application/xml");
+				attachmentText.setText(touchpointDetails);
+				content.setAttachment(attachmentText);
+				data.setContents(content);
+				component.setData(List.of(data));
 			}
 
 			return component;
@@ -1295,6 +1313,8 @@ public class SBOMApplication implements IApplication {
 				bytes = new byte[0];
 				component.setType(Type.DATA);
 			} else {
+				// Only a component of type data should have data.
+				component.setData(List.of());
 				bytes = getArtifactBytes(getCompositeArtifactRepository(), artifactDescriptor);
 				addHashes(component, bytes);
 			}
@@ -1303,7 +1323,10 @@ public class SBOMApplication implements IApplication {
 
 		private byte[] getArtifactBytes(IArtifactRepository repository, IArtifactDescriptor artifactDescriptor) {
 			var out = new ByteArrayOutputStream();
-			getCompositeArtifactRepository().getRawArtifact(artifactDescriptor, out, new NullProgressMonitor());
+			var status = repository.getRawArtifact(artifactDescriptor, out, new NullProgressMonitor());
+			if (!status.isOK()) {
+				throw new RuntimeException(new CoreException(status));
+			}
 			return out.toByteArray();
 		}
 
@@ -1867,6 +1890,33 @@ public class SBOMApplication implements IApplication {
 									matcher.appendTail(jsonValue);
 									property.setValue(jsonValue.toString());
 									undoables.add(() -> property.setValue(value));
+								}
+							}
+						}
+
+						var data = component.getData();
+						if (data != null) {
+							for (ComponentData componentData : component.getData()) {
+								var contents = componentData.getContents();
+								if (contents != null) {
+									var attachmentText = contents.getAttachment();
+									if (attachmentText != null
+											&& "application/xml".equals(attachmentText.getContentType())) {
+										var text = attachmentText.getText();
+										if (text != null) {
+											var matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(text);
+											if (matcher.find()) {
+												var jsonValue = new StringBuilder();
+												do {
+													matcher.appendReplacement(jsonValue,
+															"&#x0A;" + matcher.group(1).replaceAll(" ", "&#x20;"));
+												} while (matcher.find());
+												matcher.appendTail(jsonValue);
+												attachmentText.setText(jsonValue.toString());
+												undoables.add(() -> attachmentText.setText(text));
+											}
+										}
+									}
 								}
 							}
 						}

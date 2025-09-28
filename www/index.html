@@ -106,6 +106,7 @@
 		.license,
 		.hash,
 		.property,
+		.data,
 		.reference,
 		.ancestor,
 		.jar,
@@ -236,6 +237,7 @@
 
 		.touchpoint {
 			display: block;
+			color: darkgreen;
 			margin-left: 1em;
 			white-space: pre;
 		}
@@ -790,6 +792,39 @@ ${publisherDetail}
 ${description.replace(' - \u200B', '<hr>')}
 </span>
 </div>`];
+			}
+			return [];
+		}
+
+		function getDataElements(component) {
+			const data = getModelValue(component, 'data');
+			if (data != null) {
+				return data.map(datum => {
+					const content = getModelValue(datum, 'contents');
+					if (content != null) {
+						const attachment = getModelValue(content, 'attachment');
+						if (attachment != null) {
+							const contentType = getModelValue(attachment, 'contentType');
+							if (contentType == 'application/xml') {
+								const text = getModelValue(attachment, 'content');
+								if (text != null) {
+									const escapedValue = text.
+										replaceAll('&#x0A;', '\n').
+										replaceAll(/^<\/?unit>\n?/gm, '').
+										replaceAll('&#x20;', ' ').
+										replaceAll('&', '&amp;').
+										replaceAll('<', '&lt;').
+										replaceAll('>', '&gt;')
+									return `<div class="data" style="display:none">
+<img class="icon" src="data.svg">
+<span class="touchpoint">${escapedValue}</span>
+</div>`
+								}
+							}
+						}
+					}
+					return '';
+				});
 			}
 			return [];
 		}
@@ -1474,6 +1509,8 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 				const hashElements = getHashElements(component);
 				const propertyElements = getPropertyElements(component);
 				const referencesElements = getReferenceElements(component);
+				// const dataElements = getDataElements(component);
+				const dataElements = [];
 				const detailElements = getDetailElements(component);
 				const incomingDependencyElements = getDependencyElements(incomingDependencyMap, component, 'incoming-dependency');
 				const outgoingDependencyElements = getDependencyElements(outgoingDependencyMap, component, 'outgoing-dependency');
@@ -1487,6 +1524,7 @@ ${licenseElements.join('\n')}
 ${hashElements.join('\n')}
 ${propertyElements.join('\n')}
 ${referencesElements.join('\n')}
+${dataElements.join('\n')}
 ${detailElements.join('\n')}
 ${incomingDependencyElements.join('\n')}
 ${outgoingDependencyElements.join('\n')}
@@ -1748,6 +1786,13 @@ ${componentElements.join('\n')}
 					<img onclick="popup('help-detail')" alt="help" src="help.svg">
 
 					<br>
+					<!--
+					<input class="filter" type="checkbox" id="data" name="data" onclick="filterClick(event, this)" checked>
+					<label for="data"><img alt="" src="data.svg"> Data<span class="count"></span></label>
+					<img onclick="popup('help-data')" alt="help" src="help.svg">
+
+					<br>
+					-->
 
 					<input class="filter" type="checkbox" id="property" name="property" onclick="filterClick(event, this)" checked>
 					<label for="property"><img alt="" src="property.svg"> Properties<span class="count" data-total='*'></span></label>
