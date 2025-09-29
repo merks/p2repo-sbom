@@ -54,11 +54,15 @@
 			margin-top: -8px;
 		}
 
-		.count {
+		.count,
+		.nested-count {
 			color: darkcyan;
-			margin-left: .3em;
 			font-weight: bold;
 			font-size: 85%;
+		}
+
+		.count {
+			margin-left: .3em;
 		}
 
 		hr {
@@ -142,12 +146,6 @@
 			font-weight: bold;
 		}
 
-		.repository {
-			display: block;
-			color: firebrick;
-			padding: .2em 0em;
-		}
-
 		.label-version {
 			color: darkred;
 			font-size: 80%;
@@ -174,6 +172,10 @@
 			color: white;
 			background: firebrick;
 			vertical-align: middle;
+		}
+
+		.purl-repository {
+			color: firebrick;
 		}
 
 		.purl-group {
@@ -642,6 +644,10 @@ ${artifactURL}`;
 			}
 		}
 
+		function getNestedPurlContent(purl) {
+			return getPurlContent(purl).replaceAll(/( data-repository-url)(="[^"]+?")/g, '$1-nested$2');
+		}
+
 		function getNestedComponentElements(component) {
 			const components = getModelValue(component, 'components');
 			if (components != null) {
@@ -671,8 +677,7 @@ ${getFormattedNotes(notes)}
 				}
 				return `<span class="label-name">${name}</span> ${purls.join(' ')}`;
 			}
-			// Remove the PURL filter links.
-			return getPurlContent(purl).replaceAll(/ data-repository-url="[^"]+"/g, '');
+			return getNestedPurlContent(purl);
 		}
 
 		function getPedigreeElements(component) {
@@ -715,8 +720,7 @@ ${getFormattedNotes(notes)}
 
 		function getAncestorElementDetail(ancestor) {
 			const purl = getModelValue(ancestor, 'purl');
-			// Remove the PURL filter links.
-			return getPurlContent(purl).replaceAll(/ data-repository-url="[^"]+"/g, '');
+			return getNestedPurlContent(purl);
 		}
 
 		function getReferenceElements(component) {
@@ -1235,6 +1239,18 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 			}
 		}
 
+		function setNestedCount(filter, value) {
+			const count = filter.nextElementSibling.querySelector('.nested-count');
+			if (count != null) {
+				if (value == 0) {
+					count.parentElement.style.display = 'none';
+				} else {
+					count.textContent = value.toLocaleString();
+					count.parentElement.style.display = 'inline';
+				}
+			}
+		}
+
 		function setCount(filter, value) {
 			const count = filter.nextElementSibling.querySelector('.count');
 			if (count != null) {
@@ -1280,7 +1296,8 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 				}
 
 				let count = 0;
-				const elements = id.startsWith('purl-') ? document.querySelectorAll(`a[data-repository-url="${ids.get(id.replace(/^purl-/, ''))}"]`) : document.querySelectorAll('.' + id);
+				const isPURL = id.startsWith('purl-');
+				const elements = isPURL ? document.querySelectorAll(`a[data-repository-url="${ids.get(id.replace(/^purl-/, ''))}"]`) : document.querySelectorAll('.' + id);
 				for (const element of elements) {
 					const effectiveElement = element.localName == 'a' ? element.parentElement : element;
 					setFiltered(effectiveElement, !checked);
@@ -1294,6 +1311,18 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 				}
 				totals.set(id, count);
 				setCount(filter, count);
+
+				if (isPURL) {
+					let nestedCount = 0;
+					const nested = document.querySelectorAll(`a[data-repository-url-nested="${ids.get(id.replace(/^purl-/, ''))}"]`);
+					for (const node of nested) {
+						const artifactDiv = node.closest('.binary, .bundle, .feature, .metadata');
+						if (!isFiltered(artifactDiv)) {
+							++nestedCount;
+						}
+					}
+					setNestedCount(filter, nestedCount);
+				}
 			}
 
 			const search = document.getElementById('search');
@@ -1545,11 +1574,6 @@ ${componentElements.join('\n')}
 
 			summary.innerHTML += properties.join('<span class="bom-property-punctuation">,</span> ') + `
 <img onclick="popup(\'help-root\')" alt="help" src="help.svg">
-<hr>
-<div>
-	${generateRepositories(p2Repositories, 'p2')}
-	${generateRepositories(mavenRepositories, 'maven')}
-</div>
 `;
 			summary.style.display = 'block';
 
@@ -1570,23 +1594,25 @@ ${componentElements.join('\n')}
 			form.parentElement.style.display = 'none';
 		}
 
-		function generateRepositories(repositories, type) {
-			const keys = repositories.keys();
-			return [...keys].sort().map(url =>
-				`<span class="repository"><span class="purl-scheme">${type}</span> <a class="plain" href="${url}">${getFormattedHost(url)}</a> <span class="count">${repositories.get(url)}</span></span>`).join('\n');
-		}
-
 		function generatNestedFilters(keys, type) {
 			const fieldset = document.getElementById(`${type}-filters`)
 			const innerHTML = fieldset.innerHTML
 			fieldset.innerHTML =
 				[...keys].sort().map(name => `
 <input class="subfilter" type="checkbox" id="${type}-${getClassName(name)}" name="${type}-${name}" onclick="filterClick(event, this)" checked>
-<label for="${type}-${getClassName(name)}">${name}<span class="count"></span></label>
+<label for="${type}-${getClassName(name)}">${generateNestedFilerLabel(name, type)}<span class="count"></span>${type == 'pul' ? '' : '<span style="display:none">&nbsp;+(<span class="nested-count"></span>)</span>'}</label>
 ` ).join(type == 'purl' ? '<br>\n' : '\n') + innerHTML;
 
 			const total = document.querySelector(`label[for=${type}] span[data-total]`);
 			total.setAttribute('data-total', [...keys].map(key => `${type}-${getClassName(key)}`).join(' '));
+		}
+
+		function generateNestedFilerLabel(value, filterType) {
+			if (filterType != 'purl') {
+				return value
+			}
+			const type = p2Repositories.has(value) ? 'p2' : 'maven';
+			return `<span class="purl-repository"><span class="purl-scheme">${type}</span> <a class="plain" href="${value}">${getFormattedHost(value)}</a></span></span>`;
 		}
 
 		function scrollToTop() {

@@ -2062,7 +2062,7 @@ public class SBOMApplication implements IApplication {
 						}
 					}
 				} catch (IOException e) {
-					System.err.println("###");
+					throw new RuntimeException(e);
 				}
 			}
 
@@ -2110,14 +2110,15 @@ public class SBOMApplication implements IApplication {
 					}
 				}
 			} catch (IOException e) {
-				// If anything goes wrong we can not do much more at this stage...
+				throw new RuntimeException(e);
 			}
+
 			if (queryCentral) {
 				// This is not the end we can try to query maven central
 				try {
 					var sha1Hash = computeHash("SHA-1", bytes);
-					var queryResult = contentHandler.getContent(
-							URI.create("https://central.sonatype.com/solrsearch/select?q=1:" + sha1Hash + "&wt=json"));
+					var query = "https://central.sonatype.com/solrsearch/select?q=1:" + sha1Hash + "&wt=json";
+					var queryResult = contentHandler.getContent(URI.create(query));
 					var jsonObject = new JSONObject(queryResult);
 					if (jsonObject.has("response")) {
 						var response = jsonObject.getJSONObject("response");
@@ -2128,7 +2129,7 @@ public class SBOMApplication implements IApplication {
 						}
 					}
 				} catch (Exception e) {
-					// If anything goes wrong here, we can not do much more ...
+					throw new RuntimeException(e);
 				}
 			}
 			return null;
