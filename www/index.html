@@ -1947,7 +1947,7 @@ ${componentElements.join('\n')}
 				<h3>Package URL</h3>
 				<p>
 					Each component optionally has a <a href="https://cyclonedx.org/docs/1.6/json/#components_items_purl">PURL</a>, or package-url, that uniquely identifies the component.
-					For the CBI SBOM generator, every component has an associated PURL.
+					For the CBI p2 SBOM Generator, every component has an associated PURL.
 					This URL generally encodes traceability details about the origin on the component,
 					e.g.,
 					the Maven coordinates of an artifact from Maven Central, or
@@ -1986,7 +1986,7 @@ ${componentElements.join('\n')}
 				</p>
 				<p>
 					In these cases, the Maven Central artifact PURL of the original component is captured in the pedigree to provide traceability details.
-					In general, the CBI SBOM generator will compare the checksums of a Maven Central artifact against the checksums of the local artifact
+					In general, the CBI p2 SBOM Generator will compare the checksums of a Maven Central artifact against the checksums of the local artifact
 					before generating a PURL reference to the Maven Central artifact.
 					When they do not match exactly,
 					the pedigree captures the derivation link.
@@ -2005,7 +2005,7 @@ ${componentElements.join('\n')}
 					<a href="https://cyclonedx.org/docs/1.6/json/#components_items_components">nested components</a>.
 				</p>
 				<p>
-					The CBI SBOM generator will attempt map each such jar to and artifact available on Maven Central.
+					The CBI p2 SBOM Generator will attempt map each such jar to and artifact available on Maven Central.
 					The same underlying mechanism as used for predigree tracking of bundles is applied for any jar that can be successfully traced to Maven Central.
 				</p>
 				<hr>
@@ -2034,7 +2034,7 @@ ${componentElements.join('\n')}
 					Each component optionally has <a href="https://cyclonedx.org/docs/1.6/json/#components_items_licenses">licenses</a>.
 					Licences are bit of a mess.
 					There are so many different ways and places to specify license details,
-					producing consistent, well-formed, accurate license information is a significant challenge for the CBI SBOM generator.
+					producing consistent, well-formed, accurate license information is a significant challenge for the CBI p2 SBOM Generator.
 					A license name and license URI are recorded on a best-effort basis.
 				</p>
 				<hr>
@@ -2062,15 +2062,15 @@ ${componentElements.join('\n')}
 					i.e., a series of name-value pairs that capture additional relevant information.
 					In general p2 units have many associated properties,
 					most of which are captured in other aspect of the generated SBOM,
-					and are therefore generally filtered out by the CBI SBOM generator.
+					and are therefore generally filtered out by the CBI p2 SBOM Generator.
 				</p>
 				<p>
-					The CBI SBOM generator currently attempts to find license information via <a href="https://clearlydefined.io">https://clearlydefined.io</a>
+					The CBI p2 SBOM Generator currently attempts to find license information via <a href="https://clearlydefined.io">https://clearlydefined.io</a>
 					which generally works well only for artifacts from Maven Central.
 					These are recorded in the property <code>clearly-defined</code>.
 				</p>
 				<p>
-					The CBI SBOM generator records touchpoint information as properties.
+					The CBI p2 SBOM Generator records touchpoint information as properties.
 					Touchpoints are relevant from a security point of view because a touchpoint can in principle configure the installation in a way that affects behaviour of the system,
 					possibly in a way that compromises security.
 					Of course generally the touchpoints do simple necessary things
@@ -2099,12 +2099,12 @@ ${componentElements.join('\n')}
 					that reference external sites of the given type.
 				</p>
 				<p>
-					The CBI SBOM generator currently attempts to find license information via <a href="https://clearlydefined.io">https://clearlydefined.io</a>
+					The CBI p2 SBOM Generator currently attempts to find license information via <a href="https://clearlydefined.io">https://clearlydefined.io</a>
 					which generally works well only for artifacts from Maven Central.
 					These are recorded in the property <code>clearly-defined</code>.
 				</p>
 				<p>
-					The CBI SBOM generator records touchpoint information as properties.
+					The CBI p2 SBOM Generator records touchpoint information as properties.
 					Touchpoints are relevant from a security point of view because a touchpoint can in principle configure the installation in a way that affects behaviour of the system,
 					possibly in a way that compromises security.
 					Of course generally the touchpoints do simple necessary things
@@ -2144,7 +2144,7 @@ ${componentElements.join('\n')}
 			<div id="help-root" class="modal-popup-description">
 				<h3>SBOM Metadata</h3>
 				<p>
-					The CBI SBOM generator populates the following information for each SBOM:
+					The CBI p2 SBOM Generator populates the following information for each SBOM:
 				</p>
 				<ul>
 					<li>

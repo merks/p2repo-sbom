@@ -41,7 +41,8 @@ The p2 framework provides analogous concepts,
 projecting the OSGi metadata as p2 metadata.
 This information is a rich source of details from which to derive an SBOM.
 That being said,
-there is a significant impedance mismatch between the concept of OSGi/p2 requirements versus the concept of SBOM dependencies.
+there is a significant impedance mismatch between the concept of OSGi/p2 requirements versus the concept of
+[SBOM dependencies](https://cyclonedx.org/docs/1.6/json/#dependencies).
 
 
 ## Application Units
@@ -108,7 +109,7 @@ making it possible to generate an SBOM for p2 repositories and for Eclipse insta
 
 Given the typical close correspondence between installable unit and artifact,
 and given SBOM's primary focus on components as artifacts,
-it is beneficial to unify these two during the process of mapping p2 units and artifacts onto SBOM components.
+it is beneficial to unify these two aspects during the process of mapping p2 units and artifacts onto SBOM components.
 The components of a generated SBOM are mapped as follows:
 
 ### Bundle Mapping
@@ -140,7 +141,7 @@ The ID of the unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#
 The version of the unit is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
 The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
 The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `plugins/<ID>_<version>.jar`,
-i.e., analogous to the default mapping of the artifact in the artifact repository.
+i.e., analogous to the mapping of the artifact in the artifact repository.
 
 
 ### Feature Mapping
@@ -195,10 +196,10 @@ The jar effectively just contains the `feature.xml` and therefore contributes no
 The feature jar will be unpacked when provisioned into an installation.
 
 The ID of the `*.feature.jar` unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name) of the component.
-The version of the units is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
+The common version of the units is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
 The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
 The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `features/<base-ID>_<version>.jar`,
-i.e., analogous to the default mapping of the artifact in an artifact repository.
+i.e., analogous to the mapping of the artifact in an artifact repository.
 
 
 ### Binary Mapping
@@ -246,7 +247,7 @@ The ID of the unit is mapped to the [name](https://cyclonedx.org/docs/1.6/json/#
 The version of the unit is mapped to the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version) of the component.
 The [scope](https://cyclonedx.org/docs/1.6/json/#components_items_scope) is set to required, which is the implicit default.
 The [bom-ref](https://cyclonedx.org/docs/1.6/json/#components_items_bom-ref) is set to `binary/<ID>_<version>`,
-i.e., analogous to the default mapping of the artifact in the artifact repository.
+i.e., analogous to the mapping of the artifact in the artifact repository.
 
 
 ### Metadata Mapping
@@ -334,7 +335,7 @@ and are mapped to the [description](https://cyclonedx.org/docs/1.6/json/#compone
 
 The properties can also specify details,
 e.g., the Maven coordinates of the unit,
-that are used in other aspects of the component mapping process.
+that are used for other aspects of the component mapping process.
 Some properties may even be mapped directly to [properties](https://cyclonedx.org/docs/1.6/json/#components_items_properties) of the component;
 this is the case only for properties that are not otherwise mapped
 or are not recognized to be no of direct interest.
@@ -350,7 +351,7 @@ pkg:maven/<groupId>/<artifactId>@<version>
 Other artifacts are available purely from a p2 repository.
 These can be identified using the [proposed](https://github.com/package-url/purl-spec/issues/271) `p2` type PURL as follows:
 ```
-pkg:p2/<id>@<version>?classifier=<unit-classifier>&location=<repository-uri>
+pkg:p2/<id>@<version>?classifier=<unit-classifier>&repository_url=<repository-uri>
 ```
 The mapping process of the CBI p2 SBOM generator specifies mappings for both metadata units and artifact units,
 with a primary focus on the artifacts.
@@ -394,6 +395,29 @@ the `groupId` as the [group](https://cyclonedx.org/docs/1.6/json/#components_ite
 the `artifactId` as the [name](https://cyclonedx.org/docs/1.6/json/#components_items_name),
 the `version` as the [version](https://cyclonedx.org/docs/1.6/json/#components_items_version),
 and the `maven` type PURL as the [purl](https://cyclonedx.org/docs/1.6/json/#components_items_purl).
+
+### Nested Jars
+
+An OSGi bundle may specify a
+[bundle classpath](https://docs.osgi.org/specification/osgi.core/8.0.0/framework.module.html#framework.module.bundleclasspath)
+that references jars nested within the bundle.
+These jars are often Maven artifacts or derived from Maven artifacts.
+In all cases,
+each such jar is mapped to a [nested component](https://cyclonedx.org/docs/1.6/json/#components_items_components).
+
+The CBI p2 SBOM generator scans for such jars on the bundle classpath, and attempts to determine the corresponding Maven artifact:
+- It looks for POM details in the jar or adjacent to jar to determine the Maven coordinates.
+- It queries Maven Central for the SHA-1 of the jar.
+- It queries Maven Central based on the `artfiactId`, `version`, and optional `classifier` as determined by the name of the jar.
+
+Based on a successful query result,
+the generator will verify that the corresponding Maven artifact exists and is byte-for-byte equal to nested jar.
+If the Maven artifact is byte-for-byte equal,
+a Maven-type [PURL](#purl)
+is associated with the nested jar component.
+Otherwise, if the Maven artifact exists but is modified in some way,
+a [pedigree](#pedigree)
+is associated with the nested jar component.
 
 ### Hashes
 
@@ -444,9 +468,10 @@ If that returns license details,
 the generator will record the license expression as `clearly-defined`.
 This is the behavior for the current prototype and will be integrated with the [license](#licenses) in the longer term.
 
-#### Touchpoint
+#### Touchpoints
 
 The generator will record a unit's touchpoints, if present, as a `touchpoint` property.
+Note that any unit may specify touchpoints, not only metadata units, and not all metadata units specify touchpoints.
 
 ### External References
 
@@ -454,7 +479,7 @@ The generator will record a unit's touchpoints, if present, as a `touchpoint` pr
 There are **many** available sources of potential external reference information:
 - The p2 `org.eclipse.equinox.p2.doc.url` metadata.
 - The OSGi `MANIFEST.MF` `Bundle-DocURL`, `Bundle-SCM`, and `Eclipse-SourceReferences` headers.
-- The various elements, e.g., `connection`, in a POM.
+- Various elements, e.g., `connection`, in a POM.
 
 ### Dependencies
 
@@ -476,7 +501,7 @@ In other words,
 it should be noted that the dependency information of an SBOM generated from a p2 repository for which all requirements **do not** transitively resolve is of limited utility.
 
 From the point of view of managing and tracking [Common Vulnerabilities and Exposures](https://www.cve.org/), CVEs,
-the actual details of the unit's requirement provide significantly more value than is captured in the SBOM dependencies.
+the actual details of the unit's requirements provide significantly more value than is captured in the SBOM dependencies.
 Specifically,
 suppose that a new version of some library that addresses some CVE becomes available,
 the question of whether that library's version is such that it can be substituted,
@@ -505,7 +530,7 @@ Applying this to the Eclipse Installer has provided a useful basis for comparing
 
 The Tycho SBOMs don't properly use the bom-ref of the component for specifying dependencies but rather are using two different styles,
 either the pgk:maven or pkg:p2 for a given component.
-Also has references to components that don't exist, e.g., `*.source` bundles.
+Also it has references to components that don't exist in the final distribution, e.g., `*.source` bundles.
 In the end, we can't really even a hack a workaround because the SBOM does not contain the BSN of the component, only the maven coordinates.
 The Tycho SBOMs seem to have odd components that aren't actually in the product repository,
 e.g., com.sun.xml.bind,
