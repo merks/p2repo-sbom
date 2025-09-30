@@ -1164,7 +1164,7 @@ public class SBOMApplication implements IApplication {
 			var location = getRedirectedURI(basicLocation);
 			var encodedLocation = urlEncodeQueryParameter(location.toString());
 			var purl = "pkg:p2/" + artifactKey.getId() + "@" + artifactKey.getVersion() + "?classifier="
-					+ artifactKey.getClassifier() + "&location=" + encodedLocation;
+					+ artifactKey.getClassifier() + "&repository_url=" + encodedLocation;
 			component.setPurl(purl);
 		}
 

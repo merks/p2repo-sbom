@@ -583,7 +583,7 @@
 				url += '.' + (type == null ? 'jar' : type);
 				return `<a data-repository-url="${repositoryURL}" href="${url}"><img src="download.svg"></a>`;
 			} else if (scheme == 'p2') {
-				const repositoryURL = params.get('location');
+				const repositoryURL = params.get('repository_url') || params.get('location');
 				p2Repositories.set(repositoryURL, (p2Repositories.get(repositoryURL) || 0) + 1);
 				let url = repositoryURL;
 				const classifier = params.get('classifier')
