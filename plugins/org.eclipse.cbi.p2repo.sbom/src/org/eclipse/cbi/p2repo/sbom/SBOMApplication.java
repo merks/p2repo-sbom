@@ -184,7 +184,7 @@ public class SBOMApplication implements IApplication {
 	private static final Pattern ARCHIVE_PATTERN = Pattern.compile("archive:(.*)!/.*");
 
 	private static final Pattern JAR_ARTIFACT_PATTERN = Pattern
-			.compile("(.*/)?(?<artifactId>[^-]+)-(?<version>[^-]+?)(-(?<classifier>[^-]+))?\\.jar");
+			.compile("(.*/)?(?<artifactId>[^-]+)-(?<version>([0-9.]+[^-]+)?)(-(?<classifier>[^-0-9]+))?\\.jar");
 
 	private static final XPathFactory XPATH_FACTORY = XPathFactory.newInstance();
 
@@ -2051,6 +2051,7 @@ public class SBOMApplication implements IApplication {
 							: List.of(artifactId, version, "l:" + classifier);
 					var query = "https://search.maven.org/solrsearch/select?q=" + String.join("%20AND%20", parts)
 							+ "&rows=20&wt=json";
+					System.err.println("###" + query);
 					var queryResult = contentHandler.getContent(URI.create(query));
 					var jsonObject = new JSONObject(queryResult);
 					if (jsonObject.has("response")) {
