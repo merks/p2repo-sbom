@@ -172,6 +172,12 @@ public class SBOMApplication implements IApplication {
 		return result;
 	};
 
+	/**
+	 * https://google.github.io/osv.dev/post-v1-query/
+	 * https://ossf.github.io/osv-schema/
+	 */
+	private static final URI OSV_URI = URI.create("https://api.osv.dev/v1/query");
+
 	private static final URI SBOM_RENDERER_URI = URI.create("https://download.eclipse.org/cbi/sbom");
 
 	private static final Pattern MAVEN_POM_PATTERN = Pattern.compile("META-INF/maven/[^/]+/[^/]+/pom.xml");
@@ -456,6 +462,8 @@ public class SBOMApplication implements IApplication {
 
 		private boolean processBundleClassPath;
 
+		private boolean fetchAdvisory;
+
 		private SBOMGenerator(List<String> args) throws Exception {
 			verbose = getArgument("-verbose", args);
 
@@ -465,6 +473,8 @@ public class SBOMApplication implements IApplication {
 			spdxIndex = new SPDXIndex(contentHandler);
 
 			queryCentral = getArgument("-central-search", args);
+
+			fetchAdvisory = getArgument("-advisory", args);
 
 			uriRedirections = URIUtil.parseRedirections(getArguments("-redirections", args, List.of()));
 
@@ -694,6 +704,7 @@ public class SBOMApplication implements IApplication {
 					setPurl(component, iu, artifactDescriptor, bytes);
 					gatherLicences(component, iu, artifactDescriptor, bytes);
 					gatherInnerJars(component, bytes, artifactDescriptor);
+					gatherAdvisory(component);
 					resolveDependencies(iusToDependencies.get(iu), iu);
 				}));
 			}
@@ -742,6 +753,17 @@ public class SBOMApplication implements IApplication {
 			generateJson(bom);
 
 			return Status.OK_STATUS;
+		}
+
+		private void gatherAdvisory(Component component) {
+			if (!fetchAdvisory) {
+				return;
+			}
+			try {
+				queryOSV(component, contentHandler);
+			} catch (IOException | InterruptedException e) {
+				System.err.println("Query OSV failed: " + e);
+			}
 		}
 
 		private void gatherInnerJars(Component component, byte[] bytes, IArtifactDescriptor artifactDescriptor) {
@@ -1706,6 +1728,54 @@ public class SBOMApplication implements IApplication {
 			}
 		}
 
+		/**
+		 * Query OSV (Open Source Vulnerabilities) database for vulnerability
+		 * information and populate the component with any found vulnerabilities.
+		 *
+		 * @param component      the component to populate with vulnerability
+		 *                       information
+		 * @param contentHandler the content handler for querying
+		 * @throws InterruptedException
+		 * @throws IOException
+		 */
+		private void queryOSV(Component component, ContentHandler contentHandler)
+				throws IOException, InterruptedException {
+			var purl = component.getPurl();
+			if (purl == null) {
+				return;
+			}
+			var queryJson = String.format("{\"package\":{\"purl\":\"%s\"}}", purl);
+			var body = contentHandler.getPostContent(OSV_URI, List.of("Content-Type", "application/json"), queryJson);
+			var jsonResponse = new JSONObject(body);
+			if (jsonResponse.has("vulns")) {
+				var vulns = jsonResponse.getJSONArray("vulns");
+				for (var i = 0; i < vulns.length(); i++) {
+					var vulnObj = vulns.getJSONObject(i);
+					if (vulnObj.has("references")) {
+						var references = vulnObj.getJSONArray("references");
+						for (var j = 0; j < references.length(); j++) {
+							var ref = references.getJSONObject(j);
+							if (ref.has("url") && ref.has("type")) {
+								var type = ref.getString("type");
+								var reference = new ExternalReference();
+								reference.setUrl(ref.getString("url"));
+								if ("ADVISORY".equals(type)) {
+									reference.setType(ExternalReference.Type.ADVISORIES);
+								} else if ("WEB".equals(type)) {
+									reference.setType(ExternalReference.Type.WEBSITE);
+								} else if ("PACKAGE".equals(type)) {
+									reference.setType(ExternalReference.Type.VCS);
+								} else {
+									reference.setType(ExternalReference.Type.OTHER);
+								}
+								component.addExternalReference(reference);
+							}
+						}
+					}
+				}
+			}
+		}
+
 		private boolean isExcluded(IRequirement requirement) {
 			if (requirement instanceof IRequiredCapability requiredCapability) {
 				var namespace = requiredCapability.getNamespace();
@@ -2072,7 +2142,6 @@ public class SBOMApplication implements IApplication {
 							: List.of(artifactId, version, "l:" + classifier);
 					var query = "https://search.maven.org/solrsearch/select?q=" + String.join("%20AND%20", parts)
 							+ "&rows=20&wt=json";
-					System.err.println("###" + query);
 					var queryResult = contentHandler.getContent(URI.create(query));
 					var jsonObject = new JSONObject(queryResult);
 					if (jsonObject.has("response")) {
@@ -2381,14 +2450,25 @@ public class SBOMApplication implements IApplication {
 		}
 
 		protected <T> T basicGetContent(URI uri, BodyHandler<T> bodyHandler) throws IOException, InterruptedException {
-			var requestBuilder = HttpRequest.newBuilder(uri).GET();
-			var request = requestBuilder.build();
+			var request = newRequest(uri);
 			var response = httpClient.send(request, bodyHandler);
 			var statusCode = response.statusCode();
 			if (statusCode != 200) {
 				throw new ContentHandlerException(response);
 			}
 			return response.body();
+		}
+
+		private HttpRequest newRequest(URI uri) {
+			var fragment = uri.getFragment();
+			if (fragment == null) {
+				return HttpRequest.newBuilder(uri).GET().build();
+			}
+			var baseURI = URI.create(uri.toString().replaceAll("#.*$", ""));
+			var parts = new ArrayList<>(List.of(fragment.split(",")));
+			var body = parts.remove(parts.size() - 1);
+			var headers = parts.toArray(String[]::new);
+			return HttpRequest.newBuilder(baseURI).headers(headers).POST(BodyPublishers.ofString(body)).build();
 		}
 
 		protected <T> T basicHead(URI uri, BodyHandler<T> bodyHandler) throws IOException, InterruptedException {
@@ -2412,7 +2492,8 @@ public class SBOMApplication implements IApplication {
 
 		private Path getCachePath(URI uri, String prefix) {
 			var decodedURI = URLDecoder.decode(uri.toString(), StandardCharsets.UTF_8);
-			var uriSegments = decodedURI.split("[:/?#&;]+");
+			var uriSegments = decodedURI.split("[:/?#&;,{}'\"]+");
+			uriSegments[uriSegments.length - 1] = "_" + uriSegments[uriSegments.length - 1];
 			var result = cache.resolve(prefix + String.join("/", uriSegments));
 			return result;
 		}
@@ -2457,6 +2538,12 @@ public class SBOMApplication implements IApplication {
 					throw new RuntimeException(e);
 				}
 			});
+		}
+
+		public String getPostContent(URI uri, List<String> headers, String body) throws IOException {
+			return getContent(URI.create(
+					uri + "#" + headers.stream().map(BOMUtil::urlEncodeQueryParameter).collect(Collectors.joining(","))
+							+ "," + urlEncodeQueryParameter(body)));
 		}
 
 		public String getContent(URI uri) throws IOException {
