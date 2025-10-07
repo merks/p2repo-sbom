@@ -919,6 +919,20 @@ public class SBOMApplication implements IApplication {
 										continue;
 									}
 								}
+								try {
+									// Maybe the cache folder was deleted or maybe just the binary folder in the
+									// cache folder.
+									var locationFolder = Path.of(locationURI);
+									if (!Files.isDirectory(locationFolder)) {
+										// No folder, so continue.
+										continue;
+									}
+									if (Files.list(locationFolder).filter(Files::isDirectory).findAny().isEmpty()) {
+										// No nested folders, so there cannot be actual content in the repository.
+										continue;
+									}
+								} catch (IOException e) {
+								}
 							}
 							artifactRepositoryURIs.add(locationURI);
 						}
