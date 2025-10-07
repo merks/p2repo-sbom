@@ -1369,7 +1369,13 @@ public class SBOMApplication implements IApplication {
 					var url = licenseEntry.getKey();
 					var license = new License();
 					if (licenseName != null) {
-						license.setName(licenseName);
+						if (spdxIndex.isValidID(licenseName)) {
+							license.setId(licenseName);
+						} else {
+							license.setName(licenseName);
+						}
+					} else {
+						license.setName("indeterminate");
 					}
 					license.setUrl(url);
 					licenseChoice.addLicense(license);
@@ -2248,6 +2254,10 @@ public class SBOMApplication implements IApplication {
 				license = spdxLicenceNames.get(nameOrId);
 			}
 			return license;
+		}
+
+		public boolean isValidID(String id) {
+			return spdxLicenceIds.containsKey(id);
 		}
 	}
 
