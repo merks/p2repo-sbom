@@ -224,6 +224,25 @@ org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]gro
 """),
 ]
 
+def  jdtlsRepository  = [
+  label: 'JDTLS Product repository',
+  BUILD_DESCRIPTION: 'Build the SBOMs all the JDTLS product repository,
+  SCP: "",
+  ARGS: pretty("""
+-central-search
+-advisory
+-input
+https://download.eclipse.org/jdtls/milestones/1.51.0/repository
+-process-bundle-classpath
+-xml-output
+jdtls-sbom.xml
+-json-output
+jdtls-sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
 def parambuilds = [
   eclipseMilestoneInstaller,
   eclipseMilestoneInstallers,
@@ -235,6 +254,7 @@ def parambuilds = [
   simRelStaging,
   simRelStagingProducts,
   simRelStagingProductsWithP2SourceRepository,
+  jdtlsRepository,
 ]
 
 def defaultBuild = eclipseMilestoneInstaller

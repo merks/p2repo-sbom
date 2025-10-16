@@ -819,7 +819,7 @@ public class SBOMApplication implements IApplication {
 					}
 
 					var subComponent = mavenDescriptor != null
-							? createMavenJarComponent(jar, mavenDescriptor, nestedJarBytes)
+							? createMavenJarComponent(component, jar, mavenDescriptor, nestedJarBytes)
 							: createJarComponent(component, jar);
 					addHashes(subComponent, entry.getValue());
 					component.addComponent(subComponent);
@@ -1037,8 +1037,9 @@ public class SBOMApplication implements IApplication {
 			artifactDescriptors.put(artifactKey, artifactDescriptor);
 		}
 
-		private Component createAncestorComponent(MavenDescriptor mavenDescriptor) {
+		private Component createAncestorComponent(Component parent, MavenDescriptor mavenDescriptor) {
 			var component = new Component();
+			component.setBomRef(parent.getBomRef() + "^");
 			component.setType(Component.Type.LIBRARY);
 			component.setName(mavenDescriptor.artifactId());
 			component.setGroup(mavenDescriptor.groupId());
@@ -1046,8 +1047,10 @@ public class SBOMApplication implements IApplication {
 			return component;
 		}
 
-		private Component createMavenJarComponent(String path, MavenDescriptor mavenDescriptor, byte[] bytes) {
+		private Component createMavenJarComponent(Component parent, String path, MavenDescriptor mavenDescriptor,
+				byte[] bytes) {
 			var component = new Component();
+			component.setBomRef(parent.getBomRef() + "^" + path);
 			component.setType(Component.Type.LIBRARY);
 			if (setMavenPurl(component, mavenDescriptor, bytes)) {
 				// If it's verified to be the identical artifact.
@@ -1062,6 +1065,7 @@ public class SBOMApplication implements IApplication {
 
 		private Component createJarComponent(Component parent, String path) {
 			var component = new Component();
+			component.setBomRef(parent.getBomRef() + "^" + path);
 			component.setType(Component.Type.LIBRARY);
 			component.setName(path);
 			component.setScope(Scope.REQUIRED);
@@ -1225,7 +1229,7 @@ public class SBOMApplication implements IApplication {
 				// Otherwise record this as a pedigree ancestor component.
 				var pedigree = new Pedigree();
 				var ancenstors = new Ancestors();
-				ancenstors.addComponent(createAncestorComponent(mavenDescriptor));
+				ancenstors.addComponent(createAncestorComponent(component, mavenDescriptor));
 				pedigree.setAncestors(ancenstors);
 				pedigree.setNotes(String.join(", ", differences));
 				component.setPedigree(pedigree);
@@ -1466,7 +1470,7 @@ public class SBOMApplication implements IApplication {
 										if (license != null) {
 											licenseToName.put(license, value);
 										} else {
-											System.err.println("###");
+											System.err.println("license=" + value);
 										}
 									} else {
 										licenseToName.put(value, null);
@@ -1592,11 +1596,11 @@ public class SBOMApplication implements IApplication {
 									if (license != null) {
 										licenseToName.put(license, spdxId);
 									} else {
-										System.err.println("####?>>'" + part + "'");
+										System.err.println("license-part='" + part + "'");
 									}
 								}
 							} else {
-								System.err.println("####?>'" + spdxId + "'");
+								System.err.println("license-part='" + spdxId + "'");
 							}
 						}
 					} while (matcher.find());
