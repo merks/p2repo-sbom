@@ -767,7 +767,8 @@ public class SBOMApplication implements IApplication {
 		}
 
 		private void gatherInnerJars(Component component, byte[] bytes, IArtifactDescriptor artifactDescriptor) {
-			if (!processBundleClassPath || isMetadata(artifactDescriptor)) {
+			if (!processBundleClassPath || isMetadata(artifactDescriptor) || !PublisherHelper.OSGI_BUNDLE_CLASSIFIER
+					.equals(artifactDescriptor.getArtifactKey().getClassifier())) {
 				return;
 			}
 
