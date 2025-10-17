@@ -41,6 +41,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandler;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -629,7 +630,7 @@ public class SBOMApplication implements IApplication {
 			var artifactRepositoryManager = getArtifactRepositoryManager();
 			var rootLocation = agent.getService(IAgentLocation.class).getRootLocation();
 			for (var uri : artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
-				if (rootLocation.relativize(uri) != uri) {
+				if (rootLocation.relativize(uri) != uri || isExcludedArtifactRepository(uri)) {
 					artifactRepositoryManager.removeRepository(uri);
 					removeRepository(uri);
 				} else {
@@ -943,19 +944,8 @@ public class SBOMApplication implements IApplication {
 										continue;
 									}
 								}
-								try {
-									// Maybe the cache folder was deleted or maybe just the binary folder in the
-									// cache folder.
-									var locationFolder = Path.of(locationURI);
-									if (!Files.isDirectory(locationFolder)) {
-										// No folder, so continue.
-										continue;
-									}
-									if (Files.list(locationFolder).filter(Files::isDirectory).findAny().isEmpty()) {
-										// No nested folders, so there cannot be actual content in the repository.
-										continue;
-									}
-								} catch (IOException e) {
+								if (isExcludedArtifactRepository(locationURI)) {
+									continue;
 								}
 							}
 							artifactRepositoryURIs.add(locationURI);
@@ -968,6 +958,36 @@ public class SBOMApplication implements IApplication {
 				var artifactRepositoryManager = getArtifactRepositoryManager();
 				artifactRepositoryManager.loadRepository(uri, monitor);
 			}
+		}
+
+		private boolean isExcludedArtifactRepository(URI locationURI) {
+			try {
+				var locationFolder = Path.of(locationURI);
+				try {
+					// Maybe the cache folder was deleted or maybe just the binary folder in the
+					// cache folder.
+					if (!Files.isDirectory(locationFolder)) {
+						// No folder, so continue.
+						return true;
+					}
+					if (Files.list(locationFolder).filter(Files::isDirectory).filter(directory -> {
+						try {
+							return !Files.list(directory).findAny().isEmpty();
+						} catch (IOException e) {
+							return false;
+						}
+					}).findAny().isEmpty()) {
+						// No nested non-empty folders, so there cannot be actual content in the
+						// repository.
+						return true;
+					}
+				} catch (IOException e) {
+					// Not generally expected listing a folder that exists.
+				}
+			} catch (IllegalArgumentException | FileSystemNotFoundException ex) {
+				// Expected if it's not a file: URI.
+			}
+			return false;
 		}
 
 		private URI findArtifactsXMLFolder(URI uri) {
