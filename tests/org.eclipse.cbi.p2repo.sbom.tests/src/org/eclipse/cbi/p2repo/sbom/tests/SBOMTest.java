@@ -18,7 +18,7 @@ import org.cyclonedx.model.Bom;
 import org.cyclonedx.model.Component;
 import org.cyclonedx.model.ExternalReference;
 import org.cyclonedx.model.Hash;
-import org.eclipse.cbi.p2repo.sbom.SBOMApplication;
+import org.eclipse.cbi.p2repo.sbom.BOMUtil;
 import org.junit.jupiter.api.Test;
 
 public class SBOMTest {
@@ -45,7 +45,7 @@ public class SBOMTest {
 		var bom = new Bom();
 		bom.addComponent(component);
 
-		var xmlGenerator = SBOMApplication.BOMUtil.createBomXMLGenerator(Version.VERSION_16, bom);
+		var xmlGenerator = BOMUtil.createBomXMLGenerator(Version.VERSION_16, bom);
 		var xmlString = xmlGenerator.toXmlString();
 		System.out.println(xmlString);
 

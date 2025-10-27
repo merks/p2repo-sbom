@@ -6,6 +6,9 @@
    <feature id="org.eclipse.cbi.p2repo.sbom.dependencies.feature">
       <category name="org.eclipse.cbi.p2Repo.sbom.misc"/>
    </feature>
+   <feature id="org.eclipse.cbi.p2repo.sbom.ui.feature">
+      <category name="org.eclipse.cbi.p2Repo.sbom"/>
+   </feature>
    <category-def name="org.eclipse.cbi.p2Repo.sbom" label="Eclipse CBI Repository SBOM">
       <description>
          The Eclipse Common Build Infrastructure Repository SBOM features.

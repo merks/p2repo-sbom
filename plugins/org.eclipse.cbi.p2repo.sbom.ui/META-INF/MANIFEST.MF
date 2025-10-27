@@ -1,0 +1,16 @@
+Manifest-Version: 1.0
+Automatic-Module-Name: org.eclipse.cbi.p2repo.sbom.ui
+Bundle-ManifestVersion: 2
+Bundle-Name: %pluginName
+Bundle-SymbolicName: org.eclipse.cbi.p2repo.sbom.ui;singleton:=true
+Bundle-Vendor: %providerName
+Bundle-Version: 0.1.0.qualifier
+Bundle-ClassPath: .
+Bundle-Localization: plugin
+Bundle-RequiredExecutionEnvironment: JavaSE-17
+Require-Bundle: org.eclipse.core.runtime,
+ org.eclipse.ui,
+ org.eclipse.ui.browser,
+ org.eclipse.oomph.util,
+ json,
+ org.eclipse.cbi.p2repo.sbom

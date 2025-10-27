@@ -40,7 +40,9 @@ SPDX-License-Identifier: EPL-2.0
   <modules>
     <module>../../plugins/org.eclipse.cbi.p2repo.sbom</module>
     <module>../../tests/org.eclipse.cbi.p2repo.sbom.tests</module>
+    <module>../../plugins/org.eclipse.cbi.p2repo.sbom.ui</module>
     <module>../../features/org.eclipse.cbi.p2repo.sbom.feature</module>
+    <module>../../features/org.eclipse.cbi.p2repo.sbom.ui.feature</module>
     <module>../../features/org.eclipse.cbi.p2repo.sbom.dependencies.feature</module>
     <module>../../features/org.eclipse.cbi.p2repo.sbom.tests.feature</module>
     <module>../../features/org.eclipse.cbi.p2repo.sbom.cli.product.feature</module>

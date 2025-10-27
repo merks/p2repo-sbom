@@ -8,8 +8,7 @@
 	<classpathentry kind="con" path="org.eclipse.pde.core.requiredPlugins">
 		<accessrules>
 			<accessrule kind="accessible" pattern="org/eclipse/equinox/internal/**"/>
-			<accessrule kind="accessible" pattern="org/eclipse/equinox/p2/**"/>
-			<accessrule kind="accessible" pattern="org/eclipse/equinox/spi/p2/**"/>
+			<accessrule kind="accessible" pattern="org/eclipse/oomph/internal/util/**"/>
 		</accessrules>
 	</classpathentry>
 	<classpathentry kind="src" path="src"/>
