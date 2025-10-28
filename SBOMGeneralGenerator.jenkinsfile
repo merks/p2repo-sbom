@@ -226,7 +226,7 @@ org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]gro
 
 def  jdtlsRepository  = [
   label: 'JDTLS Product repository',
-  BUILD_DESCRIPTION: 'Build the SBOMs all the JDTLS product repository,
+  BUILD_DESCRIPTION: 'Build the SBOMs all the JDTLS product repository',
   SCP: "",
   ARGS: pretty("""
 -central-search
