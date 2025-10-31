@@ -8,9 +8,11 @@ Bundle-Version: 0.1.0.qualifier
 Bundle-ClassPath: .
 Bundle-Localization: plugin
 Bundle-RequiredExecutionEnvironment: JavaSE-17
-Require-Bundle: org.eclipse.core.runtime,
+Require-Bundle: org.eclipse.cbi.p2repo.sbom,
+ json,
+ org.eclipse.core.runtime,
+ org.eclipse.core.resources,
+ org.eclipse.oomph.util,
  org.eclipse.ui,
  org.eclipse.ui.browser,
- org.eclipse.oomph.util,
- json,
- org.eclipse.cbi.p2repo.sbom
+ org.eclipse.ui.ide

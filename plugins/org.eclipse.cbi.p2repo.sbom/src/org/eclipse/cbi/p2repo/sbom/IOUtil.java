@@ -13,6 +13,7 @@ package org.eclipse.cbi.p2repo.sbom;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -30,6 +31,12 @@ public final class IOUtil {
 
 	private IOUtil() {
 		throw new UnsupportedOperationException("Do not instantiate");
+	}
+
+	public static InterruptedIOException toInterruptedIOException(InterruptedException ex) {
+		var interruptedIOException = new InterruptedIOException();
+		interruptedIOException.initCause(interruptedIOException);
+		return interruptedIOException;
 	}
 
 	public static Map<String, byte[]> getZipContents(byte[] bytes) throws IOException {

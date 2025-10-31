@@ -9,6 +9,7 @@
 		<accessrules>
 			<accessrule kind="accessible" pattern="org/eclipse/equinox/internal/**"/>
 			<accessrule kind="accessible" pattern="org/eclipse/oomph/internal/util/**"/>
+			<accessrule kind="accessible" pattern="org/eclipse/ui/internal/browser/**"/>
 		</accessrules>
 	</classpathentry>
 	<classpathentry kind="src" path="src"/>

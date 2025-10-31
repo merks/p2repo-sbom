@@ -44,7 +44,8 @@ public class SBOMApplication implements IApplication {
 		return EXIT_OK;
 	}
 
-	public static void generate(List<String> args, IProgressMonitor monitor) throws Exception {
+	public static void generate(List<String> arguments, IProgressMonitor monitor) throws Exception {
+		var args = new ArrayList<>(arguments);
 		var sbomGeneratorResults = new ArrayList<SBOMGenerator.Result>();
 		var installationsFolder = getArgument("-installations", args, null);
 		var verbose = getArgument("-verbose", args);
@@ -104,7 +105,7 @@ public class SBOMApplication implements IApplication {
 				System.out.println("Generating Index: " + index);
 			}
 			var render = getArgument("-renderer", args, SBOM_RENDERER_URI.toString());
-			generateIndex(indexPath, URI.create(render), sbomGeneratorResults);
+			generateIndex(indexPath, arguments, URI.create(render), sbomGeneratorResults);
 
 			var previewRedirections = parseRedirections(getArguments("-preview", args, List.of()));
 			var redirectedIndex = getRedirectedURI(toURI(indexPath), previewRedirections);
@@ -114,8 +115,8 @@ public class SBOMApplication implements IApplication {
 		}
 	}
 
-	private static void generateIndex(Path indexPath, URI renderer, List<SBOMGenerator.Result> sbomGeneratorResults)
-			throws IOException {
+	private static void generateIndex(Path indexPath, List<String> arguments, URI renderer,
+			List<SBOMGenerator.Result> sbomGeneratorResults) throws IOException {
 		var html = """
 				<!DOCTYPE html>
 				<html lang=en>
@@ -126,6 +127,9 @@ public class SBOMApplication implements IApplication {
 							img {
 								max-height: 3ex;
 							}
+							td {
+								vertical-align: top;
+							}
 
 						</style>
 				</head>
@@ -133,6 +137,11 @@ public class SBOMApplication implements IApplication {
 					<table>
 						${items}
 					</table>
+
+					<details>
+						<summary>Arguments</summary>
+						<pre>${args}</pre>
+					</details>
 
 					<script>
 						// This allows the arguments to the file query parameter to be relative such that the folder with the index.html and the SBOMs is portable.
@@ -152,9 +161,20 @@ public class SBOMApplication implements IApplication {
 				""";
 
 		html = html.replace("${title}", "SBOM Index");
+		html = html.replace("${args}", toString(arguments));
+
 		var items = new ArrayList<String>();
 		for (var sbomGenerator : sbomGeneratorResults) {
 			var content = new ArrayList<String>();
+			content.add("""
+					<td>
+						<details>
+							<summary></summary>
+							<pre style="font-size: 85%">${args}</pre>
+						</details>
+					</td>
+					""".replace("${args}", toString(sbomGenerator.arguments())));
+
 			var inputs = sbomGenerator.inputs();
 			var inputLinks = inputs.stream().map(SBOMApplication::toLink)
 					.collect(Collectors.joining("<br/>", "<td>", "</td>"));
@@ -162,13 +182,19 @@ public class SBOMApplication implements IApplication {
 
 			var outputs = sbomGenerator.outputs();
 			for (var output : outputs) {
-				var relativize = indexPath.getParent().relativize(output);
-				var label = relativize.toString().endsWith(".json") ? "json" : "xml";
+				var relativePath = indexPath.getParent().relativize(output).toString();
+				var label = relativePath.endsWith(".json") ? "json" : "xml";
 				var hrefs = """
-						<td><a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a></td>
-						                  <td><a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a></td>
+						<td>
+							<a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a>
+						</td>
+						<td>
+							<a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a>
+						</td>
 						""";
-				hrefs = hrefs.replace("${renderer}", renderer.toString()).replace("${file}", relativize.toString())
+				hrefs = hrefs //
+						.replace("${renderer}", renderer.toString()) //
+						.replace("${file}", relativePath) //
 						.replace("${label}", label);
 				content.add(hrefs);
 			}
@@ -184,6 +210,10 @@ public class SBOMApplication implements IApplication {
 		var formattedItems = String.join("\n", items).replace("\n", "\n		");
 		html = html.replace("${items}", formattedItems);
 		Files.writeString(indexPath, html);
+	}
+
+	private static String toString(List<String> arguments) {
+		return arguments.stream().map(it -> !it.startsWith("-") ? "  " + it : it).collect(Collectors.joining("&#10;"));
 	}
 
 	private static String toLink(URI uri) {

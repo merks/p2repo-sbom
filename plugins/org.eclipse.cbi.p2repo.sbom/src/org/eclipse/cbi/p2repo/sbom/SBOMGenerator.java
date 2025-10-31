@@ -219,9 +219,11 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final List<Pattern> expectedMissingArtifactIUPatterns = new ArrayList<>();
 
-	private final Map<URI, URI> uriRedirections;
-
 	private final List<Path> outputs = new ArrayList<>();
+
+	private final List<String> arguments = new ArrayList<>();
+
+	private final Map<URI, URI> uriRedirections;
 
 	private final ByteCache byteCache;
 
@@ -255,8 +257,12 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private IArtifactRepositoryManager artifactRepositoryManager;
 
-	public SBOMGenerator(List<String> args) throws Exception {
+	public SBOMGenerator(List<String> arguments) throws Exception {
 		super(createAgent());
+
+		this.arguments.addAll(arguments);
+
+		var args = new ArrayList<>(arguments);
 
 		verbose = getArgument("-verbose", args);
 
@@ -591,11 +597,15 @@ public class SBOMGenerator extends AbstractApplication {
 		return artifactRepositoryManager;
 	}
 
-	private List<Path> getOutputs() {
+	public List<String> getCommandLineArguments() {
+		return arguments;
+	}
+
+	public List<Path> getOutputs() {
 		return outputs;
 	}
 
-	private List<URI> getInputs() {
+	public List<URI> getInputs() {
 		var result = new ArrayList<URI>();
 		if (installationLocation != null) {
 			result.add(getRedirectedURIForRedirections(installationLocation));
@@ -1753,6 +1763,7 @@ public class SBOMGenerator extends AbstractApplication {
 				if (xmlOutput != null) {
 					var output = Path.of(xmlOutput).toAbsolutePath();
 					outputs.add(output);
+					Files.createDirectories(output.getParent());
 					Files.writeString(output, xmlString);
 				}
 			} catch (Exception ex) {
@@ -1909,9 +1920,9 @@ public class SBOMGenerator extends AbstractApplication {
 		return defaultAgentProvider.createAgent(agentTempDirectory.toUri());
 	}
 
-	public static record Result(List<URI> inputs, List<Path> outputs) {
+	public static record Result(List<String> arguments, List<URI> inputs, List<Path> outputs) {
 		public Result(SBOMGenerator sbomGenerator) {
-			this(sbomGenerator.getInputs(), sbomGenerator.getOutputs());
+			this(sbomGenerator.getCommandLineArguments(), sbomGenerator.getInputs(), sbomGenerator.getOutputs());
 		}
 	}
 

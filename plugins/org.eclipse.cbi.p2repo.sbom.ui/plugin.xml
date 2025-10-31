@@ -42,4 +42,34 @@
          </command>
       </menuContribution>
    </extension>
+   <extension
+         point="org.eclipse.ui.newWizards">
+      <category
+            id="org.eclipse.cbi.p2repo.sbom.ui.new"
+            name="Software Bill of Materials">
+      </category>
+      <wizard
+            canFinishEarly="false"
+            category="org.eclipse.cbi.p2repo.sbom.ui.new"
+            class="org.eclipse.cbi.p2repo.sbom.ui.NewSBOMWizard"
+            hasPages="true"
+            icon="icons/sbom.svg"
+            id="org.eclipse.cbi.p2repo.sbom.ui.sbom.wizard"
+            name="SBOM"
+            project="false">
+      </wizard>
+   </extension>
+
+   <extension
+         point="org.eclipse.ui.editors">
+      <editor
+            class="org.eclipse.cbi.p2repo.sbom.ui.SBOMRenderer"
+            contributorClass="org.eclipse.cbi.p2repo.sbom.ui.SBOMRenderer$ActionBarContributor"
+            default="false"
+            extensions="html"
+            icon="icons/sbom.svg"
+            id="org.eclipse.cbi.p2repo.sbom.ui.render"
+            name="Renderer">
+      </editor>
+   </extension>
 </plugin>

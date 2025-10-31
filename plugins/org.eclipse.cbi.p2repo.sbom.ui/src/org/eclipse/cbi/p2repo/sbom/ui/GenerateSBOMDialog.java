@@ -10,25 +10,16 @@
  */
 package org.eclipse.cbi.p2repo.sbom.ui;
 
-import static org.eclipse.core.runtime.URIUtil.toURI;
+import static org.eclipse.cbi.p2repo.sbom.ui.SBOMUIUtil.getEclipseInstallLocation;
 
-import java.lang.reflect.InvocationTargetException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import org.eclipse.cbi.p2repo.sbom.SBOMApplication;
-import org.eclipse.core.runtime.OperationCanceledException;
-import org.eclipse.core.runtime.Platform;
-import org.eclipse.core.runtime.ProgressMonitorWrapper;
-import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
-import org.eclipse.jface.operation.ModalContext;
 import org.eclipse.jface.widgets.WidgetFactory;
-import org.eclipse.jface.wizard.ProgressMonitorPart;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.layout.GridData;
@@ -44,28 +35,24 @@ import org.eclipse.swt.widgets.Text;
 /**
  * A dialog for configuring SBOM generation settings.
  */
-public class GenerateSBOMDialog extends Dialog {
+public class GenerateSBOMDialog extends DialogWithProgress {
 
 	private final List<Consumer<List<String>>> argumentHandlers = new ArrayList<>();
-
-	private ProgressMonitorPart progressMonitorPart;
 
 	private Button openRendererButton;
 
 	public GenerateSBOMDialog(Shell parentShell) {
 		super(parentShell);
-		setShellStyle(getShellStyle() & ~SWT.APPLICATION_MODAL | SWT.MIN);
 	}
 
 	@Override
-	protected boolean isResizable() {
-		return true;
-	}
+	protected boolean generate() {
+		var args = new ArrayList<String>();
+		for (var handler : argumentHandlers) {
+			handler.accept(args);
+		}
 
-	@Override
-	protected void configureShell(Shell newShell) {
-		super.configureShell(newShell);
-		newShell.setText("Generate SBOM");
+		return generate(args, openRendererButton.getSelection());
 	}
 
 	@Override
@@ -94,7 +81,6 @@ public class GenerateSBOMDialog extends Dialog {
 			}
 		});
 
-		// JSON Output
 		createLabel(container, "JSON output:", "Optional path for the JSON SBOM output file");
 		var jsonOutputText = createText(container, SWT.BORDER, getDefaultOutputPath(".json"));
 		createBrowseButton(container, jsonOutputText, "*.json", "JSON Files");
@@ -143,18 +129,7 @@ public class GenerateSBOMDialog extends Dialog {
 			}
 		});
 
-		var progressMonitorComposite = new Composite(container, SWT.BORDER);
-		var progressMonitorLayout = new GridLayout();
-		progressMonitorLayout.marginHeight = 0;
-		progressMonitorLayout.marginWidth = 0;
-		progressMonitorLayout.numColumns = 2;
-		progressMonitorComposite.setLayout(progressMonitorLayout);
-		var progressMonitorGridData = createFullWidthGridData();
-		progressMonitorGridData.exclude = true;
-		progressMonitorComposite.setLayoutData(progressMonitorGridData);
-
-		progressMonitorPart = new ProgressMonitorPart(progressMonitorComposite, new GridLayout(), true);
-		progressMonitorPart.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+		createProgressMonitorPart(container, createFullWidthGridData());
 
 		return container;
 	}
@@ -167,6 +142,7 @@ public class GenerateSBOMDialog extends Dialog {
 		openRendererButton = new Button(composite, SWT.CHECK);
 		openRendererButton.setText("Open in renderer");
 		openRendererButton.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, true, false));
+		openRendererButton.setSelection(true);
 		return super.createButtonBar(composite);
 	}
 
@@ -174,85 +150,6 @@ public class GenerateSBOMDialog extends Dialog {
 	protected void createButtonsForButtonBar(Composite parent) {
 		createButton(parent, IDialogConstants.OK_ID, "Generate", true);
 		createButton(parent, IDialogConstants.CANCEL_ID, IDialogConstants.CANCEL_LABEL, false);
-	}
-
-	@Override
-	protected void buttonPressed(int buttonId) {
-		if (buttonId == IDialogConstants.OK_ID) {
-			var progressMonitorPartComposite = progressMonitorPart.getParent();
-			var progressMonitorPartCompositeGridData = (GridData) progressMonitorPartComposite.getLayoutData();
-			progressMonitorPartCompositeGridData.exclude = false;
-			progressMonitorPartComposite.getParent().layout(true);
-			progressMonitorPart.attachToCancelComponent(null);
-
-			// Only grow the dialog the first time, not after subsequence failures.
-			//
-			var shell = getShell();
-			if (progressMonitorPartComposite.isVisible()) {
-				var size = progressMonitorPartComposite.getSize();
-				var shellSize = shell.getSize();
-				shell.setSize(shellSize.x, shellSize.y + size.y);
-			} else {
-				progressMonitorPartComposite.setVisible(true);
-			}
-
-			setEnabled(getContents(), false);
-
-			Runnable handleFailure = () -> {
-				progressMonitorPartCompositeGridData.exclude = true;
-				progressMonitorPartComposite.setVisible(false);
-				progressMonitorPartComposite.getParent().layout(true);
-				setEnabled(getContents(), true);
-			};
-
-			if (!generate()) {
-				handleFailure.run();
-				return;
-			}
-
-			// This can be used to test the behavior of the progress part without
-			// generating.
-			//
-			if (Boolean.FALSE) {
-				var atomicInteger = new AtomicInteger(100);
-				try {
-					ModalContext.run(monitor -> {
-						monitor.beginTask("Generating", 100);
-						while (atomicInteger.decrementAndGet() > 0) {
-							if (monitor.isCanceled()) {
-								throw new OperationCanceledException();
-							}
-							monitor.worked(1);
-							Thread.sleep(100);
-						}
-					}, true, progressMonitorPart, shell.getDisplay());
-				} catch (InvocationTargetException | InterruptedException e) {
-					handleFailure.run();
-					return;
-				}
-			}
-		}
-		super.buttonPressed(buttonId);
-	}
-
-	@Override
-	protected void handleShellCloseEvent() {
-		if (getButton(CANCEL).isEnabled()) {
-			super.handleShellCloseEvent();
-		}
-	}
-
-	private void setEnabled(Control control, boolean enabled) {
-		if (control == progressMonitorPart) {
-			return;
-		}
-		if (control instanceof Composite composite) {
-			for (var child : composite.getChildren()) {
-				setEnabled(child, enabled);
-			}
-		} else {
-			control.setEnabled(enabled);
-		}
 	}
 
 	private Label createLabel(Composite container, String text, String toolTipText) {
@@ -303,25 +200,6 @@ public class GenerateSBOMDialog extends Dialog {
 		return new GridData(SWT.FILL, SWT.CENTER, true, false, 3, 1);
 	}
 
-	private String getEclipseInstallLocation() {
-		var explicitInstallationLocation = System.getProperty("org.eclipse.cbi.p2repo.sbom.installation.location");
-		if (explicitInstallationLocation != null) {
-			return explicitInstallationLocation;
-		}
-		var url = Platform.getInstallLocation().getURL();
-		try {
-			var path = Path.of(toURI(url)).toRealPath();
-			if (Platform.OS.isMac()) {
-				if (path.toString().endsWith("/Contents/Eclipse")) {
-					return path.getParent().getParent().toString();
-				}
-			}
-			return path.toString();
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
-
 	private String getDefaultOutputPath(String extension) {
 		var installLocation = getEclipseInstallLocation();
 		if (installLocation == null || installLocation.isEmpty()) {
@@ -338,80 +216,5 @@ public class GenerateSBOMDialog extends Dialog {
 		} catch (InvalidPathException e) {
 			return "";
 		}
-	}
-
-	private boolean generate() {
-		var args = new ArrayList<String>();
-		for (var handler : argumentHandlers) {
-			handler.accept(args);
-		}
-
-		var cache = SBOMUIUtil.getStateLocation().append("cache");
-		args.add("-cache");
-		args.add(cache.toOSString());
-
-		var openInRenderer = openRendererButton.getSelection();
-
-		try {
-			ModalContext.run(monitor -> {
-				try {
-					SBOMApplication.generate(args, new ProgressMonitorWrapper(monitor) {
-						@Override
-						public void beginTask(String name, int totalWork) {
-							checkCanceled();
-							super.beginTask(name, totalWork);
-						}
-
-						@Override
-						public void internalWorked(double work) {
-							checkCanceled();
-							super.internalWorked(work);
-						}
-
-						@Override
-						public void setTaskName(String name) {
-							checkCanceled();
-							super.setTaskName(name);
-						}
-
-						@Override
-						public void worked(int work) {
-							checkCanceled();
-							super.worked(work);
-						}
-
-						@Override
-						public void subTask(String name) {
-							checkCanceled();
-							super.subTask(name);
-						}
-
-						private void checkCanceled() {
-							if (isCanceled()) {
-								throw new OperationCanceledException();
-							}
-						}
-					});
-				} catch (OperationCanceledException e) {
-					throw new InterruptedException();
-				} catch (Exception e) {
-					throw new InvocationTargetException(e);
-				}
-
-				if (openInRenderer) {
-					if (args.contains("-xml-output")) {
-						SBOMRenderer.show(Path.of(args.get(args.indexOf("-xml-output") + 1)));
-					} else if (args.contains("-json-output")) {
-						SBOMRenderer.show(Path.of(args.get(args.indexOf("-json-output") + 1)));
-					}
-				}
-			}, true, progressMonitorPart, getShell().getDisplay());
-		} catch (InterruptedException e) {
-			return false;
-		} catch (InvocationTargetException e) {
-			SBOMUIUtil.openErrorDialog(getParentShell(), e.getTargetException());
-			return false;
-		}
-		return true;
 	}
 }

@@ -11,6 +11,7 @@
 package org.eclipse.cbi.p2repo.sbom;
 
 import static org.eclipse.cbi.p2repo.sbom.BOMUtil.urlEncodeQueryParameter;
+import static org.eclipse.cbi.p2repo.sbom.IOUtil.toInterruptedIOException;
 import static org.eclipse.cbi.p2repo.sbom.XMLUtil.newDocumentBuilder;
 
 import java.io.IOException;
@@ -254,17 +255,17 @@ public class ContentHandler {
 								+ " seconds [" + retry + " retries left]");
 						TimeUnit.SECONDS.sleep(retryAfter);
 					} catch (InterruptedException e1) {
-						throw new InterruptedIOException();
+						throw toInterruptedIOException(e1);
 					}
 					continue;
 				}
 				throw e;
 
 			} catch (InterruptedException e) {
-				throw new InterruptedIOException();
+				throw toInterruptedIOException(e);
 			}
 		}
-		throw new InterruptedIOException();
+		throw new InterruptedIOException("Failed after " + retry + " retries: " + uri);
 	}
 
 	private boolean retryRequest(int statusCode) {

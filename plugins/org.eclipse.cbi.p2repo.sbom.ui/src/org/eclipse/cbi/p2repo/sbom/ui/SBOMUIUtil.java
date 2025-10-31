@@ -10,8 +10,11 @@
  */
 package org.eclipse.cbi.p2repo.sbom.ui;
 
+import static org.eclipse.core.runtime.URIUtil.toURI;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.Path;
 import java.util.Arrays;
 
 import org.eclipse.core.runtime.ILog;
@@ -54,7 +57,7 @@ public final class SBOMUIUtil {
 			protected void constrainShellSize() {
 				var shell = getShell();
 				var size = shell.getSize();
-				var computeSize = shell.computeSize(size.x * 11 / 10, size.y * 11 / 10);
+				var computeSize = shell.computeSize(size.x * 12 / 10, size.y * 12 / 10);
 				var computeTrim = shell.computeTrim(0, 0, computeSize.x, computeSize.y);
 				shell.setSize(computeTrim.width, size.y);
 				super.constrainShellSize();
@@ -66,5 +69,24 @@ public final class SBOMUIUtil {
 			}
 		}.open();
 
+	}
+
+	public static String getEclipseInstallLocation() {
+		var explicitInstallationLocation = System.getProperty("org.eclipse.cbi.p2repo.sbom.installation.location");
+		if (explicitInstallationLocation != null) {
+			return explicitInstallationLocation;
+		}
+		var url = Platform.getInstallLocation().getURL();
+		try {
+			var path = Path.of(toURI(url)).toRealPath();
+			if (Platform.OS.isMac()) {
+				if (path.toString().endsWith("/Contents/Eclipse")) {
+					return path.getParent().getParent().toString();
+				}
+			}
+			return path.toString();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 }
