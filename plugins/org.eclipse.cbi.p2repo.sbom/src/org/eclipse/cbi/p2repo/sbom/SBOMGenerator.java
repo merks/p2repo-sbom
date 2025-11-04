@@ -99,6 +99,8 @@ import org.eclipse.equinox.p2.metadata.ITouchpointType;
 import org.eclipse.equinox.p2.metadata.MetadataFactory;
 import org.eclipse.equinox.p2.metadata.MetadataFactory.InstallableUnitDescription;
 import org.eclipse.equinox.p2.publisher.actions.JREAction;
+import org.eclipse.equinox.p2.query.IQuery;
+import org.eclipse.equinox.p2.query.IQueryResult;
 import org.eclipse.equinox.p2.query.QueryUtil;
 import org.eclipse.equinox.p2.repository.ICompositeRepository;
 import org.eclipse.equinox.p2.repository.IRepository;
@@ -398,10 +400,9 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private void buildArtifactMappings() {
-		var metadataRepositoryManager = getMetadataRepositoryManager();
 		var artifactRepository = getCompositeArtifactRepository();
 		var metadataArtifacts = new HashSet<IInstallableUnit>();
-		for (var iu : metadataRepositoryManager.query(QueryUtil.ALL_UNITS, null).toSet()) {
+		for (var iu : query(QueryUtil.ALL_UNITS, null).toSet()) {
 			if ("true".equals(iu.getProperty(QueryUtil.PROP_TYPE_CATEGORY)) || //
 					A_JRE_JAVASE_ID.equals(iu.getId())) {
 				continue;
@@ -422,7 +423,7 @@ public class SBOMGenerator extends AbstractApplication {
 						var matcher = FEATURE_JAR_PATTERN.matcher(id);
 						if (matcher.matches()) {
 							var iuQuery = QueryUtil.createIUQuery(matcher.group(1) + ".group", iu.getVersion());
-							var set = metadataRepositoryManager.query(iuQuery, null).toSet();
+							var set = query(iuQuery, null).toSet();
 							if (set.size() != 1) {
 								if (verbose) {
 									System.err.println("featureless-jar=" + iu);
@@ -767,6 +768,10 @@ public class SBOMGenerator extends AbstractApplication {
 		}
 	}
 
+	private IQueryResult<IInstallableUnit> query(IQuery<IInstallableUnit> query, IProgressMonitor monitor) {
+		return getCompositeMetadataRepository().query(query, monitor);
+	}
+
 	private void loadRepositories(URI uri, Set<Integer> types, IProgressMonitor monitor) throws ProvisionException {
 		var repositoryDescriptor = new RepositoryDescriptor();
 		if (types.size() == 1) {
@@ -892,7 +897,7 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private void addJRE(IProgressMonitor monitor) throws ProvisionException {
-		if (metadataRepositoryManager.query(QueryUtil.createIUQuery(A_JRE_JAVASE_ID), null).isEmpty()) {
+		if (query(QueryUtil.createIUQuery(A_JRE_JAVASE_ID), null).isEmpty()) {
 			var jreIU = JREAction.createJREIU();
 			try {
 				var jres = Files.createTempDirectory("jres");
@@ -1678,7 +1683,6 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private void resolveDependencies(Dependency dependency, IInstallableUnit iu) {
-		var metadataRepositoryManager = getMetadataRepositoryManager();
 		var component = iuComponents.get(iu);
 		var componentBomRef = component.getBomRef();
 
@@ -1689,7 +1693,7 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 
 			var matches = requirement.getMatches();
-			var requiredIUs = metadataRepositoryManager.query(QueryUtil.createMatchQuery(matches), null).toSet();
+			var requiredIUs = query(QueryUtil.createMatchQuery(matches), null).toSet();
 			if (requiredIUs.isEmpty()) {
 				var min = requirement.getMin();
 				if (min != 0) {
