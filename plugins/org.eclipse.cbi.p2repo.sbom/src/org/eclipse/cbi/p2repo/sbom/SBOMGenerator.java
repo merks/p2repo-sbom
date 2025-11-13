@@ -268,7 +268,10 @@ public class SBOMGenerator extends AbstractApplication {
 
 		verbose = getArgument("-verbose", args);
 
-		contentHandler = new ContentHandler(getArgument("-cache", args, null));
+		contentHandler = new ContentHandler(getArgument("-cache", args, null),
+				getArgument("-retry", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.retry", 5)),
+				getArgument("-retry-delay", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.retry.delay", 30)),
+				getArgument("-timeout", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.timeout", 30)));
 		byteCache = new ByteCache(getArgument("-byte-cache", args, null));
 		processBundleClassPath = getArgument("-process-bundle-classpath", args);
 		spdxIndex = new SPDXIndex(contentHandler);

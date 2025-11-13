@@ -28,6 +28,7 @@ import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -48,17 +49,22 @@ public class ContentHandler {
 
 		private final int statusCode;
 
-		private String retryAfter;
+		private final String retryAfter;
 
-		public ContentHandlerException(HttpResponse<?> response) {
+		private final int retryDelay;
+
+		private ContentHandlerException(HttpResponse<?> response, int retryDelay) {
 			super("status code " + response.statusCode() + " -> " + response.uri());
+			this.retryDelay = retryDelay;
 			this.statusCode = response.statusCode();
 			retryAfter = response.headers().firstValue("Retry-After").orElse(null);
 		}
 
-		public ContentHandlerException(int statusCode, URI uri) {
+		private ContentHandlerException(int statusCode, URI uri, int retryDelay) {
 			super("status code " + statusCode + " -> " + uri);
 			this.statusCode = statusCode;
+			this.retryDelay = retryDelay;
+			this.retryAfter = null;
 		}
 
 		public int statusCode() {
@@ -72,9 +78,10 @@ public class ContentHandler {
 				}
 			} catch (NumberFormatException e) {
 				// it could be a date... not supported yet!
-				System.err.println("Can't parse retry header: " + retryAfter + " using default of 5 seconds!");
+				System.err.println(
+						"Can't parse retry header: " + retryAfter + " using default of " + retryDelay + " seconds!");
 			}
-			return 5; // default 5 seconds
+			return retryDelay;
 		}
 	}
 
@@ -84,7 +91,16 @@ public class ContentHandler {
 
 	private final HttpClient httpClient;
 
-	public ContentHandler(String cache) {
+	private final int retry;
+
+	private final int retryDelay;
+
+	private final int timeout;
+
+	public ContentHandler(String cache, int retry, int retryDelay, int timeout) {
+		this.retry = retry;
+		this.retryDelay = retryDelay;
+		this.timeout = timeout;
 		httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
 
 		try {
@@ -115,7 +131,7 @@ public class ContentHandler {
 		var response = httpClient.send(request, bodyHandler);
 		var statusCode = response.statusCode();
 		if (statusCode != 200) {
-			throw new ContentHandlerException(response);
+			throw new ContentHandlerException(response, retryDelay);
 		}
 		return response.body();
 	}
@@ -129,7 +145,8 @@ public class ContentHandler {
 		var parts = new ArrayList<>(List.of(fragment.split(",")));
 		var body = parts.remove(parts.size() - 1);
 		var headers = parts.toArray(String[]::new);
-		return HttpRequest.newBuilder(baseURI).headers(headers).POST(BodyPublishers.ofString(body)).build();
+		return HttpRequest.newBuilder(baseURI).timeout(Duration.ofSeconds(timeout)).headers(headers)
+				.POST(BodyPublishers.ofString(body)).build();
 	}
 
 	protected <T> T basicHead(URI uri, BodyHandler<T> bodyHandler) throws IOException, InterruptedException {
@@ -138,7 +155,7 @@ public class ContentHandler {
 		var response = httpClient.send(request, bodyHandler);
 		var statusCode = response.statusCode();
 		if (statusCode != 200) {
-			throw new ContentHandlerException(response);
+			throw new ContentHandlerException(response, retryDelay);
 		}
 		return response.body();
 	}
@@ -233,9 +250,9 @@ public class ContentHandler {
 
 		var path404 = getCachePath404(uri);
 		if (Files.isRegularFile(path404) && !isCacheExpired(path404)) {
-			throw new ContentHandlerException(404, uri);
+			throw new ContentHandlerException(404, uri, retryDelay);
 		}
-		var retry = 5;
+		var currentRetry = retry;
 		while (!Thread.currentThread().isInterrupted()) {
 			try {
 				Files.createDirectories(path.getParent());
@@ -248,11 +265,11 @@ public class ContentHandler {
 					Files.createDirectories(path404.getParent());
 					Files.writeString(path404, "");
 				}
-				if (retry-- > 0 && retryRequest(statusCode)) {
+				if (currentRetry-- > 0 && retryRequest(statusCode)) {
 					try {
 						var retryAfter = e.getRetryAfter();
 						System.err.println("## Request to " + uri + " failed, retry again after " + retryAfter
-								+ " seconds [" + retry + " retries left]");
+								+ " seconds [" + currentRetry + " retries left]");
 						TimeUnit.SECONDS.sleep(retryAfter);
 					} catch (InterruptedException e1) {
 						throw toInterruptedIOException(e1);
@@ -265,7 +282,7 @@ public class ContentHandler {
 				throw toInterruptedIOException(e);
 			}
 		}
-		throw new InterruptedIOException("Failed after " + retry + " retries: " + uri);
+		throw new InterruptedIOException("Failed after " + currentRetry + " retries: " + uri);
 	}
 
 	private boolean retryRequest(int statusCode) {

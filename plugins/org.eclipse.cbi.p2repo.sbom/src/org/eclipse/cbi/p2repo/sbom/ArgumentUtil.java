@@ -41,6 +41,18 @@ public final class ArgumentUtil {
 		return args.remove(index);
 	}
 
+	public static int getArgument(String name, List<String> args, int defaultValue) {
+		var index = args.indexOf(name);
+		if (index == -1) {
+			return defaultValue;
+		}
+		args.remove(index);
+		if (index >= args.size()) {
+			throw new IllegalArgumentException("An argument value is expected after " + name);
+		}
+		return Integer.valueOf(args.remove(index));
+	}
+
 	public static List<String> getArguments(String name, List<String> args, List<String> defaultValue) {
 		var index = args.indexOf(name);
 		if (index == -1) {
