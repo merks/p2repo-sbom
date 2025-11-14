@@ -908,6 +908,7 @@ public class SBOMGenerator extends AbstractApplication {
 				var jresRepository = metadataRepositoryManager.createRepository(jres.toUri(), "JREs",
 						IMetadataRepositoryManager.TYPE_SIMPLE_REPOSITORY, Map.of());
 				jresRepository.addInstallableUnits(List.of(jreIU));
+				((ICompositeRepository<?>) getCompositeMetadataRepository()).addChild(jresRepository.getLocation());
 			} catch (IOException e) {
 				throw new ProvisionException("Cannot create temp folder: ", e);
 			}

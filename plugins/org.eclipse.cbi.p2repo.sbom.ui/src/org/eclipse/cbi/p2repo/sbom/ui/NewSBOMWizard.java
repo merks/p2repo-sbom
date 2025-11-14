@@ -79,7 +79,6 @@ public class NewSBOMWizard extends Wizard implements INewWizard {
 				Map.entry("SBOM of p2 Repository", """
 						-central-search
 						-advisory
-						-clearly-defined
 						-process-bundle-classpath
 						-input
 						https://download.eclipse.org/jdtls/milestones/1.51.0/repository
@@ -87,7 +86,6 @@ public class NewSBOMWizard extends Wizard implements INewWizard {
 				Map.entry("SBOM of Local Installation", """
 						-central-search
 						-advisory
-						-clearly-defined
 						-process-bundle-classpath
 						-installation
 						${installation}
@@ -95,7 +93,6 @@ public class NewSBOMWizard extends Wizard implements INewWizard {
 				Map.entry("SBOM of Remote Installation", """
 						-central-search
 						-advisory
-						-clearly-defined
 						-process-bundle-classpath
 						-installation
 						https://download.eclipse.org/oomph/products/eclipse-inst-linux64.tar.gz
