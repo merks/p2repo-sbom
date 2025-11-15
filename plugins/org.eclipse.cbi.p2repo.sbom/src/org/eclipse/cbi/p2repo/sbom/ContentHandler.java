@@ -89,6 +89,8 @@ public class ContentHandler {
 
 	private final Path cache;
 
+	private final URIUtil.URIMap uriMap;
+
 	private final HttpClient httpClient;
 
 	private final int retry;
@@ -97,7 +99,8 @@ public class ContentHandler {
 
 	private final int timeout;
 
-	public ContentHandler(String cache, int retry, int retryDelay, int timeout) {
+	public ContentHandler(String cache, URIUtil.URIMap uriMap, int retry, int retryDelay, int timeout) {
+		this.uriMap = uriMap;
 		this.retry = retry;
 		this.retryDelay = retryDelay;
 		this.timeout = timeout;
@@ -111,6 +114,69 @@ public class ContentHandler {
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
+		}
+	}
+
+	public boolean exists(URI uri) {
+		return exists.computeIfAbsent(uriMap.redirect(uri), u -> {
+			var path = getCachePath(uri);
+			if (Files.isRegularFile(path) && !isCacheExpired(path)) {
+				return true;
+			}
+
+			var path404 = getCachePath404(uri);
+			if (Files.isRegularFile(path404) && !isCacheExpired(path404)) {
+				return false;
+			}
+
+			try {
+				Files.createDirectories(path.getParent());
+				basicHead(uri, BodyHandlers.ofString());
+				Files.writeString(path, "");
+				return true;
+			} catch (ContentHandlerException e) {
+				if (e.statusCode() == 404) {
+					try {
+						Files.createDirectories(path404.getParent());
+						Files.writeString(path404, "");
+					} catch (IOException e1) {
+						throw new RuntimeException(e);
+					}
+					return false;
+				}
+				throw new RuntimeException(e);
+			} catch (IOException | InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		});
+	}
+
+	public String getPostContent(URI uri, List<String> headers, String body) throws IOException {
+		return getContent(URI.create(uriMap.redirect(uri) + "#"
+				+ headers.stream().map(BOMUtil::urlEncodeQueryParameter).collect(Collectors.joining(",")) + ","
+				+ urlEncodeQueryParameter(body)));
+	}
+
+	public String getContent(URI uri) throws IOException {
+		return getContent(uriMap.redirect(uri), Files::readString, Files::writeString, BodyHandlers.ofString());
+	}
+
+	public byte[] getBinaryContent(URI uri) throws IOException {
+		return getContent(uriMap.redirect(uri), Files::readAllBytes, Files::write, BodyHandlers.ofByteArray());
+	}
+
+	public Path getContentCache(URI uri) throws IOException {
+		return getContent(uriMap.redirect(uri), path -> path, (path, t) -> {
+		}, BodyHandlers.ofFile(getCachePath(uri)));
+	}
+
+	public Document getXMLContent(URI uri) throws IOException {
+		var content = getContent(uri);
+		try {
+			var builder = newDocumentBuilder();
+			return builder.parse(new InputSource(new StringReader(content)));
+		} catch (ParserConfigurationException | SAXException e) {
+			throw new IOException(uri + " : " + e.getMessage(), e);
 		}
 	}
 
@@ -184,60 +250,7 @@ public class ContentHandler {
 		void write(Path path, T t) throws IOException;
 	}
 
-	public boolean exists(URI uri) {
-		return exists.computeIfAbsent(uri, u -> {
-			var path = getCachePath(uri);
-			if (Files.isRegularFile(path) && !isCacheExpired(path)) {
-				return true;
-			}
-
-			var path404 = getCachePath404(uri);
-			if (Files.isRegularFile(path404) && !isCacheExpired(path404)) {
-				return false;
-			}
-
-			try {
-				Files.createDirectories(path.getParent());
-				basicHead(uri, BodyHandlers.ofString());
-				Files.writeString(path, "");
-				return true;
-			} catch (ContentHandlerException e) {
-				if (e.statusCode() == 404) {
-					try {
-						Files.createDirectories(path404.getParent());
-						Files.writeString(path404, "");
-					} catch (IOException e1) {
-						throw new RuntimeException(e);
-					}
-					return false;
-				}
-				throw new RuntimeException(e);
-			} catch (IOException | InterruptedException e) {
-				throw new RuntimeException(e);
-			}
-		});
-	}
-
-	public String getPostContent(URI uri, List<String> headers, String body) throws IOException {
-		return getContent(URI.create(
-				uri + "#" + headers.stream().map(BOMUtil::urlEncodeQueryParameter).collect(Collectors.joining(","))
-						+ "," + urlEncodeQueryParameter(body)));
-	}
-
-	public String getContent(URI uri) throws IOException {
-		return getContent(uri, Files::readString, Files::writeString, BodyHandlers.ofString());
-	}
-
-	public byte[] getBinaryContent(URI uri) throws IOException {
-		return getContent(uri, Files::readAllBytes, Files::write, BodyHandlers.ofByteArray());
-	}
-
-	public Path getContentCache(URI uri) throws IOException {
-		return getContent(uri, path -> path, (path, t) -> {
-		}, BodyHandlers.ofFile(getCachePath(uri)));
-	}
-
-	public <T> T getContent(URI uri, Reader<T> reader, Writer<T> writer, BodyHandler<T> bodyHandler)
+	private <T> T getContent(URI uri, Reader<T> reader, Writer<T> writer, BodyHandler<T> bodyHandler)
 			throws IOException {
 		if ("file".equals(uri.getScheme())) {
 			return reader.read(Path.of(uri));
@@ -289,15 +302,5 @@ public class ContentHandler {
 		return statusCode == 429 /* To many Requests */ || statusCode == 503 /* Service unavailable */
 				|| statusCode == 502 /* Bad Gateway */ || statusCode == 504 /* Gateway timeout */
 				|| statusCode == 524 /* Cloudflare-specific timeout */;
-	}
-
-	public Document getXMLContent(URI uri) throws IOException {
-		var content = getContent(uri);
-		try {
-			var builder = newDocumentBuilder();
-			return builder.parse(new InputSource(new StringReader(content)));
-		} catch (ParserConfigurationException | SAXException e) {
-			throw new IOException(uri + " : " + e.getMessage(), e);
-		}
 	}
 }

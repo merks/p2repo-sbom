@@ -9,7 +9,6 @@ import static org.eclipse.cbi.p2repo.sbom.BOMUtil.createProperty;
 import static org.eclipse.cbi.p2repo.sbom.BOMUtil.urlEncodeQueryParameter;
 import static org.eclipse.cbi.p2repo.sbom.IOUtil.extractInstallation;
 import static org.eclipse.cbi.p2repo.sbom.IOUtil.getZipContents;
-import static org.eclipse.cbi.p2repo.sbom.URIUtil.getRedirectedURI;
 import static org.eclipse.cbi.p2repo.sbom.URIUtil.parseRedirections;
 import static org.eclipse.cbi.p2repo.sbom.URIUtil.toURI;
 import static org.eclipse.cbi.p2repo.sbom.XMLUtil.evaluate;
@@ -23,6 +22,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -225,7 +225,7 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final List<String> arguments = new ArrayList<>();
 
-	private final Map<URI, URI> uriRedirections;
+	private final URIUtil.URIMap uriRedirections;
 
 	private final ByteCache byteCache;
 
@@ -236,6 +236,8 @@ public class SBOMGenerator extends AbstractApplication {
 	private final boolean verbose;
 
 	private final boolean queryCentral;
+
+	private final boolean gitIssues;
 
 	private final boolean xml;
 
@@ -269,6 +271,7 @@ public class SBOMGenerator extends AbstractApplication {
 		verbose = getArgument("-verbose", args);
 
 		contentHandler = new ContentHandler(getArgument("-cache", args, null),
+				parseRedirections(getArguments("-content-redirections", args, List.of())),
 				getArgument("-retry", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.retry", 5)),
 				getArgument("-retry-delay", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.retry.delay", 30)),
 				getArgument("-timeout", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.timeout", 30)));
@@ -277,6 +280,8 @@ public class SBOMGenerator extends AbstractApplication {
 		spdxIndex = new SPDXIndex(contentHandler);
 
 		queryCentral = getArgument("-central-search", args);
+
+		gitIssues = getArgument("-git-issues", args);
 
 		fetchAdvisory = getArgument("-advisory", args);
 
@@ -612,7 +617,7 @@ public class SBOMGenerator extends AbstractApplication {
 	public List<URI> getInputs() {
 		var result = new ArrayList<URI>();
 		if (installationLocation != null) {
-			result.add(getRedirectedURIForRedirections(installationLocation));
+			result.add(uriRedirections.redirect(installationLocation));
 		} else {
 			result.addAll(combinedRepositoryURIs);
 			result.addAll(metadataRepositoryURIs);
@@ -651,7 +656,7 @@ public class SBOMGenerator extends AbstractApplication {
 		}
 		var installationPath = Path.of(installation).toAbsolutePath();
 		if (Files.isRegularFile(installationPath)) {
-			var installationOriginatingURI = getRedirectedURIForRedirections(toURI(installationPath));
+			var installationOriginatingURI = uriRedirections.redirect(toURI(installationPath));
 			var extractedInstallation = extractInstallation(installationPath);
 			var installationParentURI = toURI(extractedInstallation.getParent().resolve("."));
 			uriRedirections.put(installationParentURI, URI.create("archive:" + installationOriginatingURI + "!/"));
@@ -1115,7 +1120,7 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 		}
 
-		var location = getRedirectedURIForRedirections(basicLocation);
+		var location = uriRedirections.redirect(basicLocation);
 		var encodedLocation = urlEncodeQueryParameter(location.toString());
 		var purl = "pkg:p2/" + artifactKey.getId() + "@" + artifactKey.getVersion() + "?classifier="
 				+ artifactKey.getClassifier() + "&repository_url=" + encodedLocation;
@@ -1124,7 +1129,6 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private boolean setMavenPurl(Component component, MavenDescriptor mavenDescriptor, byte[] bytes) {
 		try {
-			// var xmlContent = contentHandler.getXMLContent(mavenDescriptor.toPOMURI());
 			var mavenArtifactBytes = contentHandler.getBinaryContent(mavenDescriptor.toArtifactURI());
 
 			// Call this only if the Maven artifact exists.
@@ -1152,6 +1156,9 @@ public class SBOMGenerator extends AbstractApplication {
 			if (e.statusCode() != 404) {
 				throw new RuntimeException(e);
 			}
+		} catch (NoSuchFileException e) {
+			// The only valid reason to fail, like a 404,
+			// i.e., resource does not exist on the file system.
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -1205,10 +1212,6 @@ public class SBOMGenerator extends AbstractApplication {
 		}
 		// If not, use where we have fetched this from.
 		return artifactDescriptor.getRepository().getLocation();
-	}
-
-	private URI getRedirectedURIForRedirections(URI location) {
-		return getRedirectedURI(location, uriRedirections);
 	}
 
 	private void getClearlyDefinedProperty(Component component, MavenDescriptor mavenDescriptor) {
@@ -1277,6 +1280,7 @@ public class SBOMGenerator extends AbstractApplication {
 				if (e.statusCode() != 404) {
 					throw new RuntimeException(e);
 				}
+			} catch (NoSuchFileException e) {
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -1442,6 +1446,9 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private void addGitHubIssues(Component component, String value) {
+		if (!gitIssues) {
+			return;
+		}
 		var matcher = GITHUB_SCM_PATTERN.matcher(value);
 		if (matcher.matches()) {
 			var uri = URI.create("https://github.com/" + matcher.group("repo") + "/issues");

@@ -36,6 +36,8 @@ import org.xml.sax.SAXException;
 
 public final record MavenDescriptor(String groupId, String artifactId, String version, String classifier, String type) {
 
+	public static final String MAVEN_CENTRAL_URI = "https://repo.maven.apache.org/maven2/";
+
 	private static final Pattern JAR_ARTIFACT_PATTERN = Pattern
 			.compile("(.*/)?(?<artifactId>[^-]+)-(?<version>([0-9.]+[^-]+)?)(-(?<classifier>[^-0-9]+))?\\.jar");
 
@@ -216,7 +218,7 @@ public final record MavenDescriptor(String groupId, String artifactId, String ve
 	}
 
 	private URI toURI(String suffix) {
-		return URI.create("https://repo.maven.apache.org/maven2/" + groupId.replace('.', '/') + "/" + artifactId + "/"
-				+ version + "/" + artifactId + "-" + version + suffix);
+		return URI.create(MAVEN_CENTRAL_URI + groupId.replace('.', '/') + "/" + artifactId + "/" + version + "/"
+				+ artifactId + "-" + version + suffix);
 	}
 }

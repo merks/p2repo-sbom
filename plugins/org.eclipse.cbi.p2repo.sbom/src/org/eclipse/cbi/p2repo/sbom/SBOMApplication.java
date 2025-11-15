@@ -12,7 +12,6 @@ package org.eclipse.cbi.p2repo.sbom;
 
 import static org.eclipse.cbi.p2repo.sbom.ArgumentUtil.getArgument;
 import static org.eclipse.cbi.p2repo.sbom.ArgumentUtil.getArguments;
-import static org.eclipse.cbi.p2repo.sbom.URIUtil.getRedirectedURI;
 import static org.eclipse.cbi.p2repo.sbom.URIUtil.parseRedirections;
 import static org.eclipse.cbi.p2repo.sbom.URIUtil.toURI;
 
@@ -108,7 +107,7 @@ public class SBOMApplication implements IApplication {
 			generateIndex(indexPath, arguments, URI.create(render), sbomGeneratorResults);
 
 			var previewRedirections = parseRedirections(getArguments("-preview", args, List.of()));
-			var redirectedIndex = getRedirectedURI(toURI(indexPath), previewRedirections);
+			var redirectedIndex = previewRedirections.redirect(toURI(indexPath));
 			if (!"file".equals(redirectedIndex.getScheme())) {
 				URIUtil.openURL(redirectedIndex);
 			}
