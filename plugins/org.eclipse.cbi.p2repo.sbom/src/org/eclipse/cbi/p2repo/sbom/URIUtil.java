@@ -87,7 +87,7 @@ public final class URIUtil {
 			if (!targetURI.equals(oldValue)) {
 				var sourcePath = sourceURI.getRawPath();
 				var targetPath = targetURI.getRawPath();
-				if (sourcePath.endsWith("/") && targetPath.endsWith("/")) {
+				if (sourcePath != null && sourcePath.endsWith("/") && targetPath != null && targetPath.endsWith("/")) {
 					var prefixMapping = new PrefixMapping(sourceURI, targetURI);
 					var segementCount = getSegementCount(sourcePath);
 					for (var i = prefixMaps.size(); i <= segementCount; ++i) {
