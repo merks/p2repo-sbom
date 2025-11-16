@@ -203,6 +203,8 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final Map<IInstallableUnit, Component> iuComponents = new LinkedHashMap<>();
 
+	private final Set<String> excludedComponents = new LinkedHashSet<>();
+
 	private final List<URI> combinedRepositoryURIs = new ArrayList<>();
 
 	private final List<URI> metadataRepositoryURIs = new ArrayList<>();
@@ -255,6 +257,10 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final boolean fetchClearlyDefined;
 
+	private final Pattern classifierExclusions;
+
+	private final Pattern componentExclusions;
+
 	private final Bom bom;
 
 	private IMetadataRepositoryManager metadataRepositoryManager;
@@ -295,6 +301,14 @@ public class SBOMGenerator extends AbstractApplication {
 		} else {
 			installationLocation = null;
 		}
+
+		classifierExclusions = Pattern
+				.compile(getArguments("-classifier-exclusions", args, List.of()).stream().map(it -> switch (it) {
+				case "feature" -> "org.eclipse.update.feature";
+				case "bundle" -> "osgi.bundle";
+				default -> it;
+				}).collect(Collectors.joining("|")));
+		componentExclusions = Pattern.compile(String.join("|", getArguments("-component-exclusions", args, List.of())));
 
 		for (var requirementInclusions : getArguments("-requirement-inclusions", args, List.of())) {
 			inclusiveContextIUs.add(createContextIU(requirementInclusions));
@@ -470,13 +484,11 @@ public class SBOMGenerator extends AbstractApplication {
 			var iu = entry.getValue();
 			var component = createComponent(iu);
 			iuComponents.put(iu, component);
-			bom.addComponent(component);
 
 			var artifactDescriptor = artifactDescriptors.get(entry.getKey());
 			var bomRef = setBomRef(component, artifactDescriptor);
 
 			var dependency = new Dependency(bomRef);
-			bom.addDependency(dependency);
 			iusToDependencies.put(iu, dependency);
 
 			if (isMetadata(artifactDescriptor)) {
@@ -491,6 +503,15 @@ public class SBOMGenerator extends AbstractApplication {
 					component.addProperty(createProperty("missing-artifact",
 							String.join(";", artifacts.stream().map(Object::toString).toList())));
 				}
+			}
+
+			var isExcluded = componentExclusions.matcher(iu.getId()).matches()
+					|| classifierExclusions.matcher(entry.getKey().getClassifier()).matches();
+			if (isExcluded) {
+				excludedComponents.add(bomRef);
+			} else {
+				bom.addComponent(component);
+				bom.addDependency(dependency);
 			}
 		}
 
@@ -1256,12 +1277,17 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private byte[] getArtifactBytes(IArtifactRepository repository, IArtifactDescriptor artifactDescriptor) {
-		var out = new ByteArrayOutputStream();
-		var status = repository.getRawArtifact(artifactDescriptor, out, new NullProgressMonitor());
-		if (!status.isOK()) {
-			throw new RuntimeException(new CoreException(status));
+		for (var retry = 0;; ++retry) {
+			var out = new ByteArrayOutputStream();
+			var status = repository.getRawArtifact(artifactDescriptor, out, new NullProgressMonitor());
+			if (retry < 5 && status.getCode() == IArtifactRepository.CODE_RETRY) {
+				continue;
+			}
+			if (!status.isOK()) {
+				throw new RuntimeException(new CoreException(status));
+			}
+			return out.toByteArray();
 		}
-		return out.toByteArray();
 	}
 
 	private void gatherLicences(Component component, IInstallableUnit iu, IArtifactDescriptor artifactDescriptor,
@@ -1731,7 +1757,7 @@ public class SBOMGenerator extends AbstractApplication {
 								System.out.println("requirement-not-mapped-to-artifact=" + requiredIU);
 							}
 						}
-					} else {
+					} else if (!excludedComponents.contains(requiredComponent.getBomRef())) {
 						var bomRef = requiredComponent.getBomRef();
 						if (!componentBomRef.equals(bomRef)) {
 							dependency.addDependency(new Dependency(bomRef));
@@ -1862,45 +1888,48 @@ public class SBOMGenerator extends AbstractApplication {
 			try {
 				// The json serialization of a property value collapses whitespace, including
 				// line separators into a single space.
-				for (var component : bom.getComponents()) {
-					var properties = component.getProperties();
-					if (properties != null) {
-						for (var property : properties) {
-							var value = property.getValue();
-							var matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(value);
-							if (matcher.find()) {
-								var jsonValue = new StringBuilder();
-								do {
-									matcher.appendReplacement(jsonValue,
-											"&#x0A;" + matcher.group(1).replaceAll(" ", "&#x20;"));
-								} while (matcher.find());
-								matcher.appendTail(jsonValue);
-								property.setValue(jsonValue.toString());
-								undoables.add(() -> property.setValue(value));
+				var components = bom.getComponents();
+				if (components != null) {
+					for (var component : components) {
+						var properties = component.getProperties();
+						if (properties != null) {
+							for (var property : properties) {
+								var value = property.getValue();
+								var matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(value);
+								if (matcher.find()) {
+									var jsonValue = new StringBuilder();
+									do {
+										matcher.appendReplacement(jsonValue,
+												"&#x0A;" + matcher.group(1).replaceAll(" ", "&#x20;"));
+									} while (matcher.find());
+									matcher.appendTail(jsonValue);
+									property.setValue(jsonValue.toString());
+									undoables.add(() -> property.setValue(value));
+								}
 							}
 						}
-					}
 
-					var data = component.getData();
-					if (data != null) {
-						for (ComponentData componentData : component.getData()) {
-							var contents = componentData.getContents();
-							if (contents != null) {
-								var attachmentText = contents.getAttachment();
-								if (attachmentText != null
-										&& "application/xml".equals(attachmentText.getContentType())) {
-									var text = attachmentText.getText();
-									if (text != null) {
-										var matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(text);
-										if (matcher.find()) {
-											var jsonValue = new StringBuilder();
-											do {
-												matcher.appendReplacement(jsonValue,
-														"&#x0A;" + matcher.group(1).replaceAll(" ", "&#x20;"));
-											} while (matcher.find());
-											matcher.appendTail(jsonValue);
-											attachmentText.setText(jsonValue.toString());
-											undoables.add(() -> attachmentText.setText(text));
+						var data = component.getData();
+						if (data != null) {
+							for (ComponentData componentData : component.getData()) {
+								var contents = componentData.getContents();
+								if (contents != null) {
+									var attachmentText = contents.getAttachment();
+									if (attachmentText != null
+											&& "application/xml".equals(attachmentText.getContentType())) {
+										var text = attachmentText.getText();
+										if (text != null) {
+											var matcher = TOUCHPOINT_FORMATTTING_PATTERN.matcher(text);
+											if (matcher.find()) {
+												var jsonValue = new StringBuilder();
+												do {
+													matcher.appendReplacement(jsonValue,
+															"&#x0A;" + matcher.group(1).replaceAll(" ", "&#x20;"));
+												} while (matcher.find());
+												matcher.appendTail(jsonValue);
+												attachmentText.setText(jsonValue.toString());
+												undoables.add(() -> attachmentText.setText(text));
+											}
 										}
 									}
 								}
