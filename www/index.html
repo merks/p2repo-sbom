@@ -551,6 +551,9 @@
 
 		function getDependencyElements(dependenciesMap, component, type) {
 			const dependencies = dependenciesMap.get(component);
+			if (dependencies == null) {
+				return [];
+			}
 			return dependencyElements = dependencies.map(dep => {
 				const bomRef = getModelValue(dep, 'bom-ref');
 				const label = getComponentLabel(dep);
@@ -1381,7 +1384,9 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 				const ids = totalElement.getAttribute('data-total').split(' ');
 				let count = 0;
 				for (const id of ids) {
-					count += totals.get(id);
+					if (id != '') {
+						count += totals.get(id);
+					}
 				}
 				totalElement.textContent = count.toLocaleString();
 				totalElement.parentElement.style.display = 'inline-block';
