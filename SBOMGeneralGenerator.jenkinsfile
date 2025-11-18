@@ -224,7 +224,7 @@ org[.]eclipse[.](help|jdt|pde|pde[.]spies|platform|rcp)[.]source[.]feature[.]gro
 """),
 ]
 
-def  jdtlsRepository  = [
+def jdtlsRepository  = [
   label: 'JDTLS Product repository',
   BUILD_DESCRIPTION: 'Build the SBOMs all the JDTLS product repository',
   SCP: "",
@@ -243,6 +243,28 @@ jdtls-sbom.json
 """),
 ]
 
+
+def swtChartRepository  = [
+  label: 'SWT Chart repository',
+  BUILD_DESCRIPTION: 'Build the SBOM for the SWT Chart repository',
+  SCP: "",
+  ARGS: pretty("""
+-central-search
+-advisory
+-process-bundle-classpath
+-git-issues
+-use-repository-references-as-dependencies
+-input
+https://download.eclipse.org/swtchart/integration/develop/repository
+-xml-output
+sbom.xml
+-json-output
+sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
 def parambuilds = [
   eclipseMilestoneInstaller,
   eclipseMilestoneInstallers,
@@ -255,6 +277,7 @@ def parambuilds = [
   simRelStagingProducts,
   simRelStagingProductsWithP2SourceRepository,
   jdtlsRepository,
+  swtChartRepository,
 ]
 
 def defaultBuild = eclipseMilestoneInstaller
