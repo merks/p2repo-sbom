@@ -41,6 +41,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -138,16 +139,16 @@ public class SBOMGenerator extends AbstractApplication {
 	private static final String A_JRE_JAVASE_ID = "a.jre.javase";
 
 	private static final Pattern ACCEPTED_LICENSE_URL_PATTERN = Pattern
-			.compile(".*(documents/epl-v10|epl-v20|legal|license|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
+			.compile(".*(documents/e[dp]l-v10|epl-v20|legal|license|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern POTENTIAL_LICENSE_REFERENCE_PATTERN = Pattern
 			.compile("href=['\"]https?://(.*?)[/\r\n ]*['\"]");
 
-	private static final Pattern EPL_10_NAME_PATTERN = Pattern.compile("epl-?(1.0|v10).*.html?");
+	private static final Pattern EPL_10_NAME_PATTERN = Pattern.compile("epl-?(1.0|v10).*\\.html?");
 
-	private static final Pattern EPL_20_NAME_PATTERN = Pattern.compile("epl-?(2.0|v20).*.html?");
+	private static final Pattern EPL_20_NAME_PATTERN = Pattern.compile("epl-?(2.0|v20).*\\.html?");
 
-	private static final Pattern EDL_10_NAME_PATTERN = Pattern.compile("edl-?(1.0|v10).*.html?");
+	private static final Pattern EDL_10_NAME_PATTERN = Pattern.compile("edl-?(1.0|v10).*\\.(html?|php)");
 
 	private static final Pattern APACHE_PUBLIC_LICENSE_20_PATTERN = Pattern
 			.compile("Apache License\\s+\\*?\\s*Version 2.0, January 2004\\s+\\*?\\s*http://www.apache.org/licenses/");
@@ -211,6 +212,16 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final List<URI> artifactRepositoryURIs = new ArrayList<>();
 
+	private final List<URI> combinedDependencyRepositoryURIs = new ArrayList<>();
+
+	private final List<URI> metadataDependencyRepositoryURIs = new ArrayList<>();
+
+	private final List<URI> artifactDependencyRepositoryURIs = new ArrayList<>();
+
+	private final Set<IInstallableUnit> dependencyIUs = new TreeSet<>();
+
+	private final Set<IInstallableUnit> usedDependencyIUs = ConcurrentHashMap.newKeySet();
+
 	private final List<URI> p2ArtifactSourceRepositoryURIs = new ArrayList<>();
 
 	private final List<ArtifactSourceRepository> artifactSourceRepositories = new ArrayList<>();
@@ -227,6 +238,8 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final List<String> arguments = new ArrayList<>();
 
+	private final LinkedHashSet<IMetadataRepository> sourceMetataRepositories = new LinkedHashSet<>();
+
 	private final URIUtil.URIMap uriRedirections;
 
 	private final ByteCache byteCache;
@@ -240,6 +253,8 @@ public class SBOMGenerator extends AbstractApplication {
 	private final boolean queryCentral;
 
 	private final boolean gitIssues;
+
+	private final boolean useRepositoryReferencesAsDependencies;
 
 	private final boolean xml;
 
@@ -326,6 +341,16 @@ public class SBOMGenerator extends AbstractApplication {
 		combinedRepositoryURIs.addAll(getArguments("-input", args, List.of()).stream().map(URI::create).toList());
 		metadataRepositoryURIs.addAll(getArguments("-metadata", args, List.of()).stream().map(URI::create).toList());
 		artifactRepositoryURIs.addAll(getArguments("-artifact", args, List.of()).stream().map(URI::create).toList());
+
+		useRepositoryReferencesAsDependencies = getArgument("-use-repository-references-as-dependencies", arguments);
+
+		combinedDependencyRepositoryURIs
+				.addAll(getArguments("-dependency-input", args, List.of()).stream().map(URI::create).toList());
+		metadataDependencyRepositoryURIs
+				.addAll(getArguments("-dependency-metadata", args, List.of()).stream().map(URI::create).toList());
+		artifactDependencyRepositoryURIs
+				.addAll(getArguments("-dependency-artifact", args, List.of()).stream().map(URI::create).toList());
+
 		p2ArtifactSourceRepositoryURIs
 				.addAll(getArguments("-p2sources", args, getArguments("-p2-sources", args, List.of())).stream()
 						.map(URI::create).toList());
@@ -379,19 +404,11 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private void loadRepositories(IProgressMonitor monitor) throws ProvisionException {
 		var progress = SubMonitor.convert(monitor, "Loading Repositories",
-				combinedRepositoryURIs.size() * 2 + metadataRepositoryURIs.size() * 2 + artifactRepositoryURIs.size());
-		for (var uri : combinedRepositoryURIs) {
-			loadRepositories(uri, Set.of(IRepository.TYPE_METADATA, IRepository.TYPE_ARTIFACT),
-					progress.split(1, SubMonitor.SUPPRESS_NONE));
-		}
+				combinedRepositoryURIs.size() * 2 + metadataRepositoryURIs.size() * 2 + artifactRepositoryURIs.size()
+						+ combinedDependencyRepositoryURIs.size() * 2 + metadataDependencyRepositoryURIs.size() * 2
+						+ artifactDependencyRepositoryURIs.size());
 
-		for (var uri : metadataRepositoryURIs) {
-			loadRepositories(uri, Set.of(IRepository.TYPE_METADATA), progress.split(1, SubMonitor.SUPPRESS_NONE));
-		}
-
-		for (var uri : artifactRepositoryURIs) {
-			loadRepositories(uri, Set.of(IRepository.TYPE_ARTIFACT), progress.split(1, SubMonitor.SUPPRESS_NONE));
-		}
+		loadRepositories(combinedRepositoryURIs, metadataRepositoryURIs, artifactRepositoryURIs, progress);
 
 		var artifactRepositoryManager = getArtifactRepositoryManager();
 		var rootLocation = agent.getService(IAgentLocation.class).getRootLocation();
@@ -411,14 +428,63 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 		}
 
-		metadataRepositories
-				.addAll(gatherSimpleRepositories(new HashSet<>(), new TreeMap<>(), getCompositeMetadataRepository()));
+		for (var repository : getSourceMetadataRepositories()) {
+			metadataRepositories.addAll(gatherSimpleRepositories(new HashSet<>(), new TreeMap<>(), repository));
+		}
+
+		if (useRepositoryReferencesAsDependencies) {
+			// Automatically find dependency repository URIs from the repository references
+			// in the metadata repositories we've already loaded.
+			for (IMetadataRepository repository : metadataRepositories) {
+				for (var reference : repository.getReferences()) {
+					switch (reference.getType()) {
+					case IRepository.TYPE_METADATA: {
+						metadataDependencyRepositoryURIs.add(reference.getLocation());
+						break;
+					}
+					case IRepository.TYPE_ARTIFACT: {
+						artifactDependencyRepositoryURIs.add(reference.getLocation());
+						break;
+					}
+					}
+				}
+			}
+		}
 
 		addJRE(monitor);
+
+		// Compute the current IUs before loading the dependency repositories.
+		var actualIUs = query(QueryUtil.ALL_UNITS, null).toSet();
+
+		loadRepositories(combinedDependencyRepositoryURIs, metadataDependencyRepositoryURIs,
+				artifactDependencyRepositoryURIs, progress);
+
+		// The dependencies IUs are all the additional IUs that were not already present
+		// before the dependency repositories were loaded.
+		dependencyIUs.addAll(query(QueryUtil.ALL_UNITS, null).toSet());
+		dependencyIUs.removeAll(actualIUs);
+
+		for (IMetadataRepository repository : getSourceMetadataRepositories()) {
+			metadataRepositories.addAll(gatherSimpleRepositories(new HashSet<>(), new TreeMap<>(), repository));
+		}
 
 		loadSourceRepositories();
 
 		progress.done();
+	}
+
+	private void loadRepositories(List<URI> combinURIs, List<URI> metadataURIs, List<URI> artifactURIs,
+			SubMonitor progress) throws ProvisionException {
+		for (var uri : combinURIs) {
+			loadRepositories(uri, Set.of(IRepository.TYPE_METADATA, IRepository.TYPE_ARTIFACT),
+					progress.split(1, SubMonitor.SUPPRESS_NONE));
+		}
+		for (var uri : metadataURIs) {
+			loadRepositories(uri, Set.of(IRepository.TYPE_METADATA), progress.split(1, SubMonitor.SUPPRESS_NONE));
+		}
+		for (var uri : artifactURIs) {
+			loadRepositories(uri, Set.of(IRepository.TYPE_ARTIFACT), progress.split(1, SubMonitor.SUPPRESS_NONE));
+		}
 	}
 
 	private void buildArtifactMappings() {
@@ -521,85 +587,131 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private void processArtifacts(Map<IInstallableUnit, Dependency> iusToDependencies, IProgressMonitor monitor)
 			throws ProvisionException {
-		var progress = SubMonitor.convert(monitor, "Processing Artifacts", artifactIUs.size());
-		var completed = new AtomicInteger();
-		var inProgress = new AtomicInteger();
-		var remaining = new AtomicInteger(artifactIUs.size());
-		Runnable subtaskUpdater = () -> {
+		new ArtifactAnalyzer(iusToDependencies, monitor).analyze();
+	}
+
+	private class ArtifactAnalyzer {
+		private final AtomicInteger completed = new AtomicInteger();
+		private final AtomicInteger inProgress = new AtomicInteger();
+		private final AtomicInteger remaining = new AtomicInteger(artifactIUs.size());
+		private final SubMonitor progress;
+		private final Map<IInstallableUnit, Dependency> iusToDependencies;
+
+		public ArtifactAnalyzer(Map<IInstallableUnit, Dependency> iusToDependencies, IProgressMonitor monitor) {
+			this.iusToDependencies = iusToDependencies;
+			progress = SubMonitor.convert(monitor, "Processing Artifacts", artifactIUs.size());
+		}
+
+		private void update() {
 			progress.subTask(" Completed: " + completed.get() + " Processing: " + inProgress.get() + " Remaining: "
 					+ remaining.get());
-		};
-
-		// Gather details from the actual artifacts in parallel.
-		var executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
-		var futures = new LinkedHashSet<Future<?>>();
-		for (var entry : artifactIUs.entrySet()) {
-			var iu = entry.getValue();
-			var component = iuComponents.get(iu);
-			var artifactDescriptor = artifactDescriptors.get(entry.getKey());
-			futures.add(executor.submit(() -> {
-				if (verbose) {
-					System.out.println("Processing " + component.getBomRef());
-				}
-
-				inProgress.incrementAndGet();
-				subtaskUpdater.run();
-
-				var bytes = getArtifactContent(component, artifactDescriptor);
-				setPurl(component, iu, artifactDescriptor, bytes);
-				gatherLicences(component, iu, artifactDescriptor, bytes);
-				gatherInnerJars(component, bytes, artifactDescriptor);
-				gatherAdvisory(component);
-				resolveDependencies(iusToDependencies.get(iu), iu);
-
-				progress.worked(1);
-				completed.incrementAndGet();
-				inProgress.decrementAndGet();
-				remaining.decrementAndGet();
-				subtaskUpdater.run();
-			}));
 		}
 
-		executor.shutdown();
-		try {
-			executor.awaitTermination(10, TimeUnit.MINUTES);
-			var multiStatus = new MultiStatus(getClass(), 0, "Problems");
-			var canceled = false;
-			for (var future : futures) {
-				try {
-					future.get();
-				} catch (ExecutionException e) {
-					var message = e.getMessage();
-					if (e.getCause() instanceof OperationCanceledException) {
-						canceled = true;
-					} else {
-						if (verbose) {
-							System.err.println("Execution exception: " + message);
+		private void completed() {
+			progress.worked(1);
+			completed.incrementAndGet();
+			inProgress.decrementAndGet();
+			remaining.decrementAndGet();
+			update();
+		}
+
+		public void analyze() throws ProvisionException {
+			analyze(false);
+			if (!usedDependencyIUs.isEmpty()) {
+				analyze(true);
+				for (IInstallableUnit iu : usedDependencyIUs) {
+					var component = iuComponents.get(iu);
+					bom.addComponent(component);
+					bom.addDependency(iusToDependencies.get(iu));
+				}
+			}
+
+			// Transfer gathered details from binary IU to corresponding source IU.
+			for (var entry : iuComponents.entrySet()) {
+				var iu = entry.getKey();
+				var component = entry.getValue();
+				transferDetailsFromBinaryToSource(component, iu);
+			}
+
+			progress.subTask("");
+			progress.done();
+		}
+
+		private void analyze(boolean processDependencyIUs) throws ProvisionException {
+			// Gather details from the actual artifacts in parallel.
+			var executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
+			var futures = new LinkedHashSet<Future<?>>();
+			for (var entry : artifactIUs.entrySet()) {
+				var iu = entry.getValue();
+				if (processDependencyIUs) {
+					if (!dependencyIUs.contains(iu)) {
+						// Already processed and already accounted for in the progress.
+						continue;
+					}
+					if (!usedDependencyIUs.contains(iu)) {
+						// Will be ignored again, so counted as completed now.
+						inProgress.incrementAndGet();
+						completed();
+						continue;
+					}
+				} else if (dependencyIUs.contains(iu)) {
+					// Ignore during the first pass to process on the next pass.
+					continue;
+				}
+
+				var component = iuComponents.get(iu);
+				var artifactDescriptor = artifactDescriptors.get(entry.getKey());
+				futures.add(executor.submit(() -> {
+					if (verbose) {
+						System.out.println("Processing " + component.getBomRef());
+					}
+
+					inProgress.incrementAndGet();
+					update();
+
+					var bytes = getArtifactContent(component, artifactDescriptor);
+					setPurl(component, iu, artifactDescriptor, bytes);
+					gatherLicences(component, iu, artifactDescriptor, bytes);
+					gatherInnerJars(component, bytes, artifactDescriptor);
+					gatherAdvisory(component);
+					resolveDependencies(iusToDependencies.get(iu), iu, processDependencyIUs);
+
+					completed();
+				}));
+			}
+
+			executor.shutdown();
+
+			try {
+				executor.awaitTermination(10, TimeUnit.MINUTES);
+				var multiStatus = new MultiStatus(getClass(), 0, "Problems");
+				var canceled = false;
+				for (var future : futures) {
+					try {
+						future.get();
+					} catch (ExecutionException e) {
+						var message = e.getMessage();
+						if (e.getCause() instanceof OperationCanceledException) {
+							canceled = true;
+						} else {
+							if (verbose) {
+								System.err.println("Execution exception: " + message);
+							}
+							multiStatus.add(new Status(IStatus.ERROR, getClass(), message, e));
 						}
-						multiStatus.add(new Status(IStatus.ERROR, getClass(), message, e));
 					}
 				}
+
+				if (canceled) {
+					throw new OperationCanceledException();
+				}
+
+				if (!multiStatus.isOK()) {
+					throw new ProvisionException(multiStatus);
+				}
+			} catch (InterruptedException ex) {
+				throw new ProvisionException("Analysis took more than 10 minutes to complete", ex);
 			}
-
-			if (canceled) {
-				throw new OperationCanceledException();
-			}
-
-			if (!multiStatus.isOK()) {
-				throw new ProvisionException(multiStatus);
-			}
-		} catch (InterruptedException ex) {
-			throw new ProvisionException("Took more than 10 minutes", ex);
-		}
-
-		progress.subTask("");
-		progress.done();
-
-		// Transfer gathered details from binary IU to corresponding source IU.
-		for (var entry : iuComponents.entrySet()) {
-			var iu = entry.getKey();
-			var component = entry.getValue();
-			transferDetailsFromBinaryToSource(component, iu);
 		}
 	}
 
@@ -797,8 +909,25 @@ public class SBOMGenerator extends AbstractApplication {
 		}
 	}
 
+	private Set<IMetadataRepository> getSourceMetadataRepositories() {
+		if (sourceMetataRepositories.isEmpty()) {
+			var manager = getMetadataRepositoryManager();
+			for (var repositoryDescriptor : sourceRepositories) {
+				if (repositoryDescriptor.isMetadata()) {
+					try {
+						sourceMetataRepositories
+								.add(manager.loadRepository(repositoryDescriptor.getRepoLocation(), null));
+					} catch (ProvisionException e) {
+						throw new RuntimeException(e);
+					}
+				}
+			}
+		}
+		return sourceMetataRepositories;
+	}
+
 	private IQueryResult<IInstallableUnit> query(IQuery<IInstallableUnit> query, IProgressMonitor monitor) {
-		return getCompositeMetadataRepository().query(query, monitor);
+		return QueryUtil.compoundQueryable(getSourceMetadataRepositories()).query(query, monitor);
 	}
 
 	private void loadRepositories(URI uri, Set<Integer> types, IProgressMonitor monitor) throws ProvisionException {
@@ -934,7 +1063,10 @@ public class SBOMGenerator extends AbstractApplication {
 				var jresRepository = metadataRepositoryManager.createRepository(jres.toUri(), "JREs",
 						IMetadataRepositoryManager.TYPE_SIMPLE_REPOSITORY, Map.of());
 				jresRepository.addInstallableUnits(List.of(jreIU));
-				((ICompositeRepository<?>) getCompositeMetadataRepository()).addChild(jresRepository.getLocation());
+				var descriptor = new RepositoryDescriptor();
+				descriptor.setKind(RepositoryDescriptor.KIND_METADATA);
+				descriptor.setLocation(jresRepository.getLocation());
+				addSource(descriptor);
 			} catch (IOException e) {
 				throw new ProvisionException("Cannot create temp folder: ", e);
 			}
@@ -1719,7 +1851,7 @@ public class SBOMGenerator extends AbstractApplication {
 		return false;
 	}
 
-	private void resolveDependencies(Dependency dependency, IInstallableUnit iu) {
+	private void resolveDependencies(Dependency dependency, IInstallableUnit iu, boolean processDependencyIUs) {
 		var component = iuComponents.get(iu);
 		var componentBomRef = component.getBomRef();
 
@@ -1731,6 +1863,13 @@ public class SBOMGenerator extends AbstractApplication {
 
 			var matches = requirement.getMatches();
 			var requiredIUs = query(QueryUtil.createMatchQuery(matches), null).toSet();
+			if (!dependencyIUs.containsAll(requiredIUs)) {
+				// Consider the dependency IUs only if there are no non-dependency IUs that
+				// satisfy
+				// the requirement.
+				requiredIUs.removeAll(dependencyIUs);
+			}
+
 			if (requiredIUs.isEmpty()) {
 				var min = requirement.getMin();
 				if (min != 0) {
@@ -1760,7 +1899,20 @@ public class SBOMGenerator extends AbstractApplication {
 					} else if (!excludedComponents.contains(requiredComponent.getBomRef())) {
 						var bomRef = requiredComponent.getBomRef();
 						if (!componentBomRef.equals(bomRef)) {
-							dependency.addDependency(new Dependency(bomRef));
+							if (processDependencyIUs) {
+								// During the second phase when processing the dependency IUs, only add
+								// a dependency to a dependency IU if it is used.
+								if (!dependencyIUs.contains(iu) || usedDependencyIUs.contains(iu)) {
+									dependency.addDependency(new Dependency(bomRef));
+								}
+							} else {
+								// During the first phase, keep track of any requirements on dependencies IUs so
+								// we can further analyze those during the second phase.
+								if (dependencyIUs.contains(requiredIU)) {
+									usedDependencyIUs.add(requiredIU);
+								}
+								dependency.addDependency(new Dependency(bomRef));
+							}
 						}
 					}
 				}
@@ -2010,5 +2162,12 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 			return false;
 		}
+	}
+
+	@Override
+	public void addSource(RepositoryDescriptor repo) {
+		// Force the list to be recomputed to include the addition.
+		sourceMetataRepositories.clear();
+		super.addSource(repo);
 	}
 }

@@ -279,7 +279,7 @@ public class NewSBOMWizard extends Wizard implements INewWizard {
 			container.setLayout(layout);
 
 			var text = WidgetFactory.text(SWT.BORDER | SWT.H_SCROLL | SWT.V_SCROLL | SWT.READ_ONLY)
-					.layoutData(new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1)).create(container);
+					.layoutData(new GridData(SWT.FILL, SWT.FILL, true, true, 1, 1)).create(container);
 			text.setText(String.join("\n", args));
 
 			createProgressMonitorPart(container, new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1));
