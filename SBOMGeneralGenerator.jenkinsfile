@@ -265,6 +265,27 @@ sbom.json
 """),
 ]
 
+def chemClipseRepository  = [
+  label: 'ChemClipse repository',
+  BUILD_DESCRIPTION: 'Build the SBOM for the ChemClipse repository',
+  SCP: "",
+  ARGS: pretty("""
+-central-search
+-advisory
+-process-bundle-classpath
+-git-issues
+-use-repository-references-as-dependencies
+-input
+https://download.eclipse.org/chemclipse/integration/develop/repository/
+-xml-output
+sbom.xml
+-json-output
+sbom.json
+"""),
+  VMARGS: pretty("""
+"""),
+]
+
 def parambuilds = [
   eclipseMilestoneInstaller,
   eclipseMilestoneInstallers,
@@ -278,6 +299,7 @@ def parambuilds = [
   simRelStagingProductsWithP2SourceRepository,
   jdtlsRepository,
   swtChartRepository,
+  chemClipseRepository,
 ]
 
 def defaultBuild = eclipseMilestoneInstaller

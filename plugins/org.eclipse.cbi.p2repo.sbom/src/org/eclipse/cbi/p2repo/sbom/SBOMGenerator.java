@@ -1185,7 +1185,9 @@ public class SBOMGenerator extends AbstractApplication {
 			// or are not relevant.
 			if (!key.startsWith("df_LT") //
 					&& !key.endsWith(".pluginName") //
+					&& !key.endsWith(".Bundle-Name") //
 					&& !key.endsWith(".providerName") //
+					&& !key.endsWith(".Bundle-Vendor") //
 					&& !key.startsWith("maven-") //
 					&& !key.startsWith("iplog.") //
 					&& !IInstallableUnit.PROP_NAME.equals(key) //
