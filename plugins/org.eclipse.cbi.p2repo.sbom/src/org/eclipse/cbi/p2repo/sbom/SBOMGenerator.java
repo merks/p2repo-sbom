@@ -575,7 +575,7 @@ public class SBOMGenerator extends AbstractApplication {
 					|| classifierExclusions.matcher(entry.getKey().getClassifier()).matches();
 			if (isExcluded) {
 				excludedComponents.add(bomRef);
-			} else {
+			} else if (!dependencyIUs.contains(iu)) {
 				bom.addComponent(component);
 				bom.addDependency(dependency);
 			}
