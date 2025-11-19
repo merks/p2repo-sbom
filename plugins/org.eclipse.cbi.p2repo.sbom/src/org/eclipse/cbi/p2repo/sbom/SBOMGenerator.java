@@ -1725,6 +1725,9 @@ public class SBOMGenerator extends AbstractApplication {
 				}
 				var parts = url.split(" *, *");
 				for (var part : parts) {
+					if (part.startsWith("://")) {
+						part = "https" + part;
+					}
 					licenseToName.put(part, name);
 				}
 			}
