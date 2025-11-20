@@ -1428,7 +1428,7 @@ public class SBOMGenerator extends AbstractApplication {
 			byte[] bytes) {
 		var licenseToName = new TreeMap<String, String>();
 		if (bytes.length > 2 && bytes[0] == 0x50 && bytes[1] == 0x4B) {
-			gatherLicencesFromJar(component, bytes, licenseToName);
+			gatherComponentDetailsFromJar(component, bytes, licenseToName);
 		}
 
 		var mavenDescriptor = MavenDescriptor.create(iu, artifactDescriptor, bytes, queryCentral, contentHandler);
@@ -1479,7 +1479,7 @@ public class SBOMGenerator extends AbstractApplication {
 		}
 	}
 
-	private void gatherLicencesFromJar(Component component, byte[] bytes, Map<String, String> licenseToName) {
+	private void gatherComponentDetailsFromJar(Component component, byte[] bytes, Map<String, String> licenseToName) {
 		try (var zip = new ZipInputStream(new ByteArrayInputStream(bytes))) {
 			ZipEntry entry;
 			while ((entry = zip.getNextEntry()) != null) {
@@ -1572,6 +1572,11 @@ public class SBOMGenerator extends AbstractApplication {
 							addExternalReference(component, ExternalReference.Type.VCS, value + query);
 							addGitHubIssues(component, value);
 						}
+					}
+
+					var bundleVersion = headers.get("Bundle-Version");
+					if (bundleVersion != null && !Objects.equals(bundleVersion, component.getVersion())) {
+						component.setVersion(bundleVersion);
 					}
 				} else if (MAVEN_POM_PATTERN.matcher(name).matches()) {
 					var allBytes = zip.readAllBytes();
