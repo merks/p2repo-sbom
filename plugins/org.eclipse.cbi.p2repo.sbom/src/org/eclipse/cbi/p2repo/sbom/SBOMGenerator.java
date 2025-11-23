@@ -748,15 +748,15 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	public List<URI> getInputs() {
-		var result = new ArrayList<URI>();
+		var inputs = new LinkedHashSet<URI>();
 		if (installationLocation != null) {
-			result.add(uriRedirections.redirect(installationLocation));
+			inputs.add(installationLocation);
 		} else {
-			result.addAll(combinedRepositoryURIs);
-			result.addAll(metadataRepositoryURIs);
-			result.addAll(artifactRepositoryURIs);
+			inputs.addAll(combinedRepositoryURIs);
+			inputs.addAll(metadataRepositoryURIs);
+			inputs.addAll(artifactRepositoryURIs);
 		}
-		return result;
+		return inputs.stream().map(uriRedirections::redirect).toList();
 	}
 
 	private URI handleInstallation(String installation) throws IOException {
