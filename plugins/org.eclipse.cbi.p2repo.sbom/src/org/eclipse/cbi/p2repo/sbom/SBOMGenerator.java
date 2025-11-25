@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -68,6 +69,7 @@ import org.cyclonedx.model.Dependency;
 import org.cyclonedx.model.ExternalReference;
 import org.cyclonedx.model.License;
 import org.cyclonedx.model.LicenseChoice;
+import org.cyclonedx.model.Metadata;
 import org.cyclonedx.model.Pedigree;
 import org.cyclonedx.model.component.data.ComponentData;
 import org.cyclonedx.model.component.data.ComponentData.ComponentDataType;
@@ -139,7 +141,7 @@ public class SBOMGenerator extends AbstractApplication {
 	private static final String A_JRE_JAVASE_ID = "a.jre.javase";
 
 	private static final Pattern ACCEPTED_LICENSE_URL_PATTERN = Pattern
-			.compile(".*(documents/e[dp]l-v10|epl-v20|legal|license|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
+			.compile(".*(documents/e[dp]l-v10|epl-v20|legal|licen[cs]e|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern POTENTIAL_LICENSE_REFERENCE_PATTERN = Pattern
 			.compile("href=['\"]https?://(.*?)[/\r\n ]*['\"]");
@@ -361,10 +363,27 @@ public class SBOMGenerator extends AbstractApplication {
 		json = getArgument("-json", args);
 		xml = getArgument("-xml", args) || !json && xmlOutput == null && jsonOutput == null;
 
-		bom = new Bom();
+		bom = createBOM();
+	}
+
+	private Bom createBOM() {
+		var bom = new Bom();
 		var randomUUID = UUID.randomUUID();
 		bom.setSerialNumber("urn:uuid:" + randomUUID);
+		var metadata = new Metadata();
+		bom.setMetadata(metadata);
+		metadata.setTimestamp(new Date());
 
+		var component = new Component();
+		metadata.setComponent(component);
+		var bundle = FrameworkUtil.getBundle(getClass());
+		component.setGroup("org.eclipse");
+		component.setName(bundle.getSymbolicName());
+		component.setVersion(bundle.getVersion().toString());
+		component.setType(Component.Type.APPLICATION);
+		component.setBomRef("meta.root.component");
+
+		return bom;
 	}
 
 	@Override
@@ -389,6 +408,8 @@ public class SBOMGenerator extends AbstractApplication {
 			System.out.println("rejected-url");
 			rejectedURLs.stream().forEach(System.out::println);
 		}
+
+		computeRootComponents();
 
 		save(progress.split(5, SubMonitor.SUPPRESS_NONE));
 
@@ -713,6 +734,57 @@ public class SBOMGenerator extends AbstractApplication {
 				throw new ProvisionException("Analysis took more than 10 minutes to complete", ex);
 			}
 		}
+	}
+
+	private void computeRootComponents() {
+		// We need to compute roots taking into consideration that there may be circular
+		// dependencies.
+		var roots = new LinkedHashSet<String>();
+		var dependencies = new LinkedHashMap<String, List<String>>();
+		for (var dependency : bom.getDependencies()) {
+			var ref = dependency.getRef();
+			roots.add(ref);
+			var dependsOn = dependency.getDependencies();
+			if (dependsOn != null) {
+				dependencies.put(ref,
+						dependsOn.stream().map(Dependency::getRef).collect(Collectors.toCollection(ArrayList::new)));
+			}
+		}
+
+		for (var entry : dependencies.entrySet()) {
+			// If the entry is for a ref that is already removed from the roots, then we
+			// don't need to visit it because we already have.
+			var ref = entry.getKey();
+			if (roots.contains(ref)) {
+				var reachable = gatherReachableDependencies(new HashSet<>(), dependencies, entry.getValue());
+				// Remove the ref which may be present due to circularity.
+				reachable.remove(ref);
+				// Everything reachable from this ref is not a root.
+				roots.removeAll(reachable);
+			}
+		}
+
+		// Add the root dependencies for the metadata root component.
+		var rootDependency = new Dependency(bom.getMetadata().getComponent().getBomRef());
+		bom.getDependencies().add(0, rootDependency);
+		for (var root : roots) {
+			rootDependency.addDependency(new Dependency(root));
+		}
+	}
+
+	private Set<String> gatherReachableDependencies(Set<String> visited, Map<String, List<String>> dependencies,
+			List<String> dependsOn) {
+		if (dependsOn != null && !dependsOn.isEmpty()) {
+			var dependsOnCopy = dependsOn.toArray(String[]::new);
+			// Don't visit these again.
+			dependsOn.clear();
+			for (var dependency : dependsOnCopy) {
+				if (visited.add(dependency)) {
+					gatherReachableDependencies(visited, dependencies, dependencies.get(dependency));
+				}
+			}
+		}
+		return visited;
 	}
 
 	private void save(IProgressMonitor monitor) {
