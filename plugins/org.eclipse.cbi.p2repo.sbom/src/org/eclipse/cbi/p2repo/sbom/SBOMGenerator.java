@@ -256,6 +256,8 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final boolean gitIssues;
 
+	private final boolean minimizeRootDependencies;
+
 	private final boolean useRepositoryReferencesAsDependencies;
 
 	private final boolean xml;
@@ -305,6 +307,8 @@ public class SBOMGenerator extends AbstractApplication {
 		queryCentral = getArgument("-central-search", args);
 
 		gitIssues = getArgument("-git-issues", args);
+
+		minimizeRootDependencies = getArgument("-minimize-root-dependencies", args);
 
 		fetchAdvisory = getArgument("-advisory", args);
 
@@ -456,7 +460,7 @@ public class SBOMGenerator extends AbstractApplication {
 		if (useRepositoryReferencesAsDependencies) {
 			// Automatically find dependency repository URIs from the repository references
 			// in the metadata repositories we've already loaded.
-			for (IMetadataRepository repository : metadataRepositories) {
+			for (var repository : metadataRepositories) {
 				for (var reference : repository.getReferences()) {
 					switch (reference.getType()) {
 					case IRepository.TYPE_METADATA: {
@@ -485,7 +489,7 @@ public class SBOMGenerator extends AbstractApplication {
 		dependencyIUs.addAll(query(QueryUtil.ALL_UNITS, null).toSet());
 		dependencyIUs.removeAll(actualIUs);
 
-		for (IMetadataRepository repository : getSourceMetadataRepositories()) {
+		for (var repository : getSourceMetadataRepositories()) {
 			metadataRepositories.addAll(gatherSimpleRepositories(new HashSet<>(), new TreeMap<>(), repository));
 		}
 
@@ -640,7 +644,7 @@ public class SBOMGenerator extends AbstractApplication {
 			analyze(false);
 			if (!usedDependencyIUs.isEmpty()) {
 				analyze(true);
-				for (IInstallableUnit iu : usedDependencyIUs) {
+				for (var iu : usedDependencyIUs) {
 					var component = iuComponents.get(iu);
 					bom.addComponent(component);
 					bom.addDependency(iusToDependencies.get(iu));
@@ -737,30 +741,34 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private void computeRootComponents() {
-		// We need to compute roots taking into consideration that there may be circular
-		// dependencies.
+		// When minimizing the root components, need to compute roots taking into
+		// consideration that there may be circular dependencies.
 		var roots = new LinkedHashSet<String>();
 		var dependencies = new LinkedHashMap<String, List<String>>();
 		for (var dependency : bom.getDependencies()) {
 			var ref = dependency.getRef();
 			roots.add(ref);
-			var dependsOn = dependency.getDependencies();
-			if (dependsOn != null) {
-				dependencies.put(ref,
-						dependsOn.stream().map(Dependency::getRef).collect(Collectors.toCollection(ArrayList::new)));
+			if (minimizeRootDependencies) {
+				var dependsOn = dependency.getDependencies();
+				if (dependsOn != null) {
+					dependencies.put(ref, dependsOn.stream().map(Dependency::getRef)
+							.collect(Collectors.toCollection(ArrayList::new)));
+				}
 			}
 		}
 
-		for (var entry : dependencies.entrySet()) {
-			// If the entry is for a ref that is already removed from the roots, then we
-			// don't need to visit it because we already have.
-			var ref = entry.getKey();
-			if (roots.contains(ref)) {
-				var reachable = gatherReachableDependencies(new HashSet<>(), dependencies, entry.getValue());
-				// Remove the ref which may be present due to circularity.
-				reachable.remove(ref);
-				// Everything reachable from this ref is not a root.
-				roots.removeAll(reachable);
+		if (minimizeRootDependencies) {
+			for (var entry : dependencies.entrySet()) {
+				// If the entry is for a ref that is already removed from the roots, then we
+				// don't need to visit it because we already have.
+				var ref = entry.getKey();
+				if (roots.contains(ref)) {
+					var reachable = gatherReachableDependencies(new HashSet<>(), dependencies, entry.getValue());
+					// Remove the ref which may be present due to circularity.
+					reachable.remove(ref);
+					// Everything reachable from this ref is not a root.
+					roots.removeAll(reachable);
+				}
 			}
 		}
 
@@ -874,11 +882,11 @@ public class SBOMGenerator extends AbstractApplication {
 	// Loading profile metadata can cause artifact repositories to be loaded.
 	private void initRepositoryManagers() {
 		metadataRepositoryManager = super.getMetadataRepositoryManager();
-		for (URI uri : metadataRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+		for (var uri : metadataRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
 			metadataRepositoryManager.removeRepository(uri);
 		}
 		artifactRepositoryManager = super.getArtifactRepositoryManager();
-		for (URI uri : artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
+		for (var uri : artifactRepositoryManager.getKnownRepositories(IRepositoryManager.REPOSITORIES_ALL)) {
 			artifactRepositoryManager.removeRepository(uri);
 		}
 	}
@@ -1431,7 +1439,7 @@ public class SBOMGenerator extends AbstractApplication {
 	private URI getArtifactLocation(IArtifactDescriptor artifactDescriptor) {
 		// First see if there are any explicitly configured source repositories.
 		if (!strictSourceRepositories && !p2ArtifactSourceRepositoryURIs.isEmpty()) {
-			for (ArtifactSourceRepository repository : artifactSourceRepositories) {
+			for (var repository : artifactSourceRepositories) {
 				if (repository.contains(artifactDescriptor)) {
 					return repository.uri();
 				}
@@ -1925,7 +1933,7 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private boolean isExpectedMissingArtifact(IInstallableUnit iu) {
 		var value = iu.getId() + ":" + iu.getVersion();
-		for (Pattern expectedMissingArtifactIUPattern : expectedMissingArtifactIUPatterns) {
+		for (var expectedMissingArtifactIUPattern : expectedMissingArtifactIUPatterns) {
 			if (expectedMissingArtifactIUPattern.matcher(value).matches()) {
 				return true;
 			}
@@ -2145,7 +2153,7 @@ public class SBOMGenerator extends AbstractApplication {
 
 						var data = component.getData();
 						if (data != null) {
-							for (ComponentData componentData : component.getData()) {
+							for (var componentData : component.getData()) {
 								var contents = componentData.getContents();
 								if (contents != null) {
 									var attachmentText = contents.getAttachment();
