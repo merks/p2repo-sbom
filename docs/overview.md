@@ -1,4 +1,4 @@
-# CBI p2 SBOM Design Overview
+# CBI p2 SBOM Conceptual Overview
 
 An Eclipse application based on the 
 [Eclipse Platform](https://eclipse.dev/eclipse/)
@@ -21,7 +21,7 @@ including metadata about those components as well as dependencies between those 
 To produce an SBOM for an Eclipse application,
 the building blocks of the application must be mapped onto a formal SBOM model.
 The CBI p2 SBOM generator uses 
-[ClyconeDX](https://cyclonedx.org/)
+[CycloneDX](https://cyclonedx.org/)
 as the formal representation,
 currently specification version
 [1.6](https://cyclonedx.org/specification/overview/).
@@ -158,7 +158,7 @@ as well the units' associated artifact ID.
         version='1.0.0.v20250601-000'/>
   </provides>
   <requires size='2'
-    <required namespace='org.eclipse.equinox.p2.iu' name='org.exexample.abc'
+    <required namespace='org.eclipse.equinox.p2.iu' name='org.example.abc'
         range='[1.0.0.v20250601-000,1.0.0.v20250601-000]'/>
     <required namespace='org.eclipse.equinox.p2.iu' name='org.example.abc.feature.jar'
         range='[1.0.0.v20250601-000,1.0.0.v20250601-000]'>
@@ -338,7 +338,7 @@ e.g., the Maven coordinates of the unit,
 that are used for other aspects of the component mapping process.
 Some properties may even be mapped directly to [properties](https://cyclonedx.org/docs/1.6/json/#components_items_properties) of the component;
 this is the case only for properties that are not otherwise mapped
-or are not recognized to be no of direct interest.
+or are not recognized to be of direct interest.
 
 ### PURL
 
@@ -362,7 +362,7 @@ If those are available,
 **and** the generator can confirm that the local artifact is indeed byte-for-byte identical to the artifact on Maven Central,
 a `maven` type PURL is associated with the component.
 Otherwise a `p2` type PURL is associated with the component where
-a bundle unit's classifier is `osg.bundle`,
+a bundle unit's classifier is `osgi.bundle`,
 a feature unit's classifier is `org.eclipse.update.feature`,
 a binary unit's classifier is  `binary`,
 and a metadata unit's classifier is `metadata`.
@@ -375,7 +375,7 @@ except for metadata units for which it is the metadata repository URI.
 
 ### Pedigree 
 
-Special care must be taking when associating a `maven` type PURL with an artifact.
+Special care must be taken when associating a `maven` type PURL with an artifact.
 In particular,
 the SBOM consumer must be guaranteed that the hash sum of an artifact is in fact identical to the hash sum of the originating artifact on Maven Central.
 There are a number of reasons why this might not be the case,
@@ -383,7 +383,7 @@ for example,
 BND instructions may be used to synthesize an OSGi-compatible `MANIFEST.MF` for the jar,
 thereby modifying the artifact.
 
-If a unit specifies Maven a coordinate,
+If a unit specifies Maven coordinates,
 **and** an artifact exists for that coordinate **but** the artifact is not byte-for-byte identical,
 a `p2` type PURL is associated with the component.
 In addition,
@@ -408,7 +408,7 @@ each such jar is mapped to a [nested component](https://cyclonedx.org/docs/1.6/j
 The CBI p2 SBOM generator scans for such jars on the bundle classpath, and attempts to determine the corresponding Maven artifact:
 - It looks for POM details in the jar or adjacent to jar to determine the Maven coordinates.
 - It queries Maven Central for the SHA-1 of the jar.
-- It queries Maven Central based on the `artfiactId`, `version`, and optional `classifier` as determined by the name of the jar.
+- It queries Maven Central based on the `artifactId`, `version`, and optional `classifier` as determined by the name of the jar.
 
 Based on a successful query result,
 the generator will verify that the corresponding Maven artifact exists and is byte-for-byte equal to nested jar.
@@ -454,7 +454,7 @@ are presented as details in the SBOM renderer.
 As described in the [Unit Properties](#unit-properties) section,
 most unit properties are mapped to various aspects of the SBOM.
 Some properties may be mapped to component [properties](https://cyclonedx.org/docs/1.6/json/#components_items_properties)
-if they represent information not otherwise mapped and not recognized to be no of direct interest.
+if they represent information not otherwise mapped and not recognized to be of direct interest.
 
 The CBI p2 SBOM generator also captures some additional information as component properties.
 
@@ -529,7 +529,7 @@ Applying this to the Eclipse Installer has provided a useful basis for comparing
 ### Under Construction
 
 The Tycho SBOMs don't properly use the bom-ref of the component for specifying dependencies but rather are using two different styles,
-either the pgk:maven or pkg:p2 for a given component.
+either the pkg:maven or pkg:p2 for a given component.
 Also it has references to components that don't exist in the final distribution, e.g., `*.source` bundles.
 In the end, we can't really even a hack a workaround because the SBOM does not contain the BSN of the component, only the maven coordinates.
 The Tycho SBOMs seem to have odd components that aren't actually in the product repository,
