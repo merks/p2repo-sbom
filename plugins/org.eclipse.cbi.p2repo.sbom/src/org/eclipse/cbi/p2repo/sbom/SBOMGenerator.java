@@ -632,6 +632,11 @@ public class SBOMGenerator extends AbstractApplication {
 					+ remaining.get());
 		}
 
+		private Dependency getDependencies(IInstallableUnit iu) {
+			var featureJar = featuresToFeatureJars.get(iu);
+			return iusToDependencies.get(featureJar == null ? iu : featureJar);
+		}
+
 		private void completed() {
 			progress.worked(1);
 			completed.incrementAndGet();
@@ -645,9 +650,9 @@ public class SBOMGenerator extends AbstractApplication {
 			if (!usedDependencyIUs.isEmpty()) {
 				analyze(true);
 				for (var iu : usedDependencyIUs) {
-					var component = iuComponents.get(iu);
+					var component = getComponent(iu);
 					bom.addComponent(component);
-					bom.addDependency(iusToDependencies.get(iu));
+					bom.addDependency(getDependencies(iu));
 				}
 			}
 
@@ -684,7 +689,7 @@ public class SBOMGenerator extends AbstractApplication {
 					continue;
 				}
 
-				var component = iuComponents.get(iu);
+				var component = getComponent(iu);
 				var artifactDescriptor = artifactDescriptors.get(entry.getKey());
 				futures.add(executor.submit(() -> {
 					if (verbose) {
@@ -699,7 +704,7 @@ public class SBOMGenerator extends AbstractApplication {
 					gatherLicences(component, iu, artifactDescriptor, bytes);
 					gatherInnerJars(component, bytes, artifactDescriptor);
 					gatherAdvisory(component);
-					resolveDependencies(iusToDependencies.get(iu), iu, processDependencyIUs);
+					resolveDependencies(getDependencies(iu), iu, processDependencyIUs);
 
 					completed();
 				}));
@@ -1942,7 +1947,7 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private void resolveDependencies(Dependency dependency, IInstallableUnit iu, boolean processDependencyIUs) {
-		var component = iuComponents.get(iu);
+		var component = getComponent(iu);
 		var componentBomRef = component.getBomRef();
 
 		var featureGroupIU = featureJarsToFeatures.get(iu);
@@ -1978,8 +1983,7 @@ public class SBOMGenerator extends AbstractApplication {
 				}
 			} else {
 				for (var requiredIU : requiredIUs) {
-					var featureJar = featuresToFeatureJars.get(requiredIU);
-					var requiredComponent = iuComponents.get(featureJar == null ? requiredIU : featureJar);
+					var requiredComponent = getComponent(requiredIU);
 					if (requiredComponent == null) {
 						if (!requiredIU.getId().startsWith(A_JRE_JAVASE_ID)) {
 							if (verbose) {
@@ -1999,7 +2003,8 @@ public class SBOMGenerator extends AbstractApplication {
 								// During the first phase, keep track of any requirements on dependencies IUs so
 								// we can further analyze those during the second phase.
 								if (dependencyIUs.contains(requiredIU)) {
-									usedDependencyIUs.add(requiredIU);
+									var featureJarIU = featuresToFeatureJars.get(requiredIU);
+									usedDependencyIUs.add(featureJarIU == null ? requiredIU : featureJarIU);
 								}
 								dependency.addDependency(new Dependency(bomRef));
 							}
@@ -2010,6 +2015,11 @@ public class SBOMGenerator extends AbstractApplication {
 		}
 	}
 
+	private Component getComponent(IInstallableUnit iu) {
+		var featureJar = featuresToFeatureJars.get(iu);
+		return iuComponents.get(featureJar == null ? iu : featureJar);
+	}
+
 	private void transferDetailsFromBinaryToSource(Component component, IInstallableUnit iu) {
 		var id = iu.getId();
 		var matcher = SOURCE_IU_PATTERN.matcher(id);
@@ -2018,8 +2028,7 @@ public class SBOMGenerator extends AbstractApplication {
 			description.setId(matcher.group(1) + matcher.group(2));
 			description.setVersion(iu.getVersion());
 			var binaryIU = MetadataFactory.createInstallableUnit(description);
-			var binaryFeatureJarIU = featuresToFeatureJars.get(binaryIU);
-			var binaryComponent = iuComponents.get(binaryFeatureJarIU == null ? binaryIU : binaryFeatureJarIU);
+			var binaryComponent = getComponent(binaryIU);
 			if (binaryComponent != null) {
 				var licenseChoice = component.getLicenses();
 				if (licenseChoice == null) {
