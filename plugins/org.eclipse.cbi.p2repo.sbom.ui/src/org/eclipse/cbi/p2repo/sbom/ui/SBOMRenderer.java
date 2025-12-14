@@ -13,7 +13,6 @@ package org.eclipse.cbi.p2repo.sbom.ui;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse.BodyHandlers;
@@ -77,8 +76,9 @@ public class SBOMRenderer extends WebBrowserEditor {
 			try {
 				var httpServer = LocalHostServer.addContext(file.getProject());
 				var rendererURL = "http://localhost:" + httpServer.getPort() + file.getFullPath().toString();
-				super.init(site, new WebBrowserEditorInput(new URL(rendererURL), IWorkbenchBrowserSupport.LOCATION_BAR
-						| IWorkbenchBrowserSupport.NAVIGATION_BAR | IWorkbenchBrowserSupport.PERSISTENT));
+				super.init(site,
+						new WebBrowserEditorInput(URI.create(rendererURL).toURL(), IWorkbenchBrowserSupport.LOCATION_BAR
+								| IWorkbenchBrowserSupport.NAVIGATION_BAR | IWorkbenchBrowserSupport.PERSISTENT));
 				return;
 			} catch (Exception e) {
 				SBOMUIUtil.openErrorDialog(e);
@@ -141,7 +141,7 @@ public class SBOMRenderer extends WebBrowserEditor {
 							new FileContext("/" + path.getParent().getFileName(), true, path.getParent().toFile()));
 					var rendererURL = url + "/sbom/index.html?file=" + url + "/" + path.getParent().getFileName() + "/"
 							+ path.getFileName();
-					var input = new WebBrowserEditorInput(new URL(rendererURL),
+					var input = new WebBrowserEditorInput(URI.create(rendererURL).toURL(),
 							IWorkbenchBrowserSupport.LOCATION_BAR | IWorkbenchBrowserSupport.NAVIGATION_BAR);
 					open(workbench, input);
 				} catch (Exception e) {

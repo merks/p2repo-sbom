@@ -6,7 +6,7 @@ Bundle-SymbolicName: org.eclipse.cbi.p2repo.sbom.tests;singleton:=true
 Bundle-Version: 0.1.0.qualifier
 Bundle-ClassPath: .
 Bundle-Vendor: %providerName
-Bundle-RequiredExecutionEnvironment: JavaSE-17
+Bundle-RequiredExecutionEnvironment: JavaSE-21
 Export-Package: org.eclipse.cbi.p2repo.sbom.tests
 Require-Bundle: org.eclipse.cbi.p2repo.sbom,
  junit-jupiter-api;bundle-version="[5.0.0,6.0.0)",

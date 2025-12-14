@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -107,11 +108,8 @@ public class ContentHandler {
 		httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
 
 		try {
-			if (cache != null) {
-				this.cache = Path.of(cache).toAbsolutePath();
-			} else {
-				this.cache = Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.cache");
-			}
+			this.cache = cache != null ? Path.of(cache).toAbsolutePath()
+					: Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.cache");
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -163,6 +161,19 @@ public class ContentHandler {
 
 	public byte[] getBinaryContent(URI uri) throws IOException {
 		return getContent(uriMap.redirect(uri), Files::readAllBytes, Files::write, BodyHandlers.ofByteArray());
+	}
+
+	public byte[] getBinaryContent(URI uri, Supplier<byte[]> supplier) throws IOException {
+		var path = getCachePath(uri);
+		if (Files.isRegularFile(path) && !isCacheExpired(path)) {
+			return Files.readAllBytes(path);
+		}
+
+		var bytes = supplier.get();
+		Files.createDirectories(path.getParent());
+		Files.write(path, bytes);
+
+		return bytes;
 	}
 
 	public Path getContentCache(URI uri) throws IOException {

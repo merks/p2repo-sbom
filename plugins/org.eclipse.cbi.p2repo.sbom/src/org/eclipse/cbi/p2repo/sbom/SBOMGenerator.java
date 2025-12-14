@@ -84,6 +84,7 @@ import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.SubMonitor;
 import org.eclipse.equinox.internal.p2.artifact.repository.simple.SimpleArtifactRepository;
 import org.eclipse.equinox.internal.p2.core.DefaultAgentProvider;
+import org.eclipse.equinox.internal.p2.director.PermissiveSlicer;
 import org.eclipse.equinox.internal.p2.metadata.IRequiredCapability;
 import org.eclipse.equinox.internal.p2.metadata.InstallableUnit;
 import org.eclipse.equinox.internal.p2.metadata.repository.io.MetadataWriter;
@@ -244,8 +245,6 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final URIUtil.URIMap uriRedirections;
 
-	private final ByteCache byteCache;
-
 	private final ContentHandler contentHandler;
 
 	private final SPDXIndex spdxIndex;
@@ -276,6 +275,8 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final boolean fetchClearlyDefined;
 
+	private final Pattern rootIUInclusions;
+
 	private final Pattern classifierExclusions;
 
 	private final Pattern componentExclusions;
@@ -300,7 +301,6 @@ public class SBOMGenerator extends AbstractApplication {
 				getArgument("-retry", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.retry", 5)),
 				getArgument("-retry-delay", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.retry.delay", 30)),
 				getArgument("-timeout", args, Integer.getInteger("org.eclipse.cbi.p2repo.sbom.timeout", 30)));
-		byteCache = new ByteCache(getArgument("-byte-cache", args, null));
 		processBundleClassPath = getArgument("-process-bundle-classpath", args);
 		spdxIndex = new SPDXIndex(contentHandler);
 
@@ -322,6 +322,8 @@ public class SBOMGenerator extends AbstractApplication {
 		} else {
 			installationLocation = null;
 		}
+
+		rootIUInclusions = Pattern.compile(String.join("|", getArguments("-root-iu-inclusions", args, List.of())));
 
 		classifierExclusions = Pattern
 				.compile(getArguments("-classifier-exclusions", args, List.of()).stream().map(it -> switch (it) {
@@ -515,7 +517,7 @@ public class SBOMGenerator extends AbstractApplication {
 	private void buildArtifactMappings() {
 		var artifactRepository = getCompositeArtifactRepository();
 		var metadataArtifacts = new HashSet<IInstallableUnit>();
-		for (var iu : query(QueryUtil.ALL_UNITS, null).toSet()) {
+		for (var iu : queryRootIUs().toSet()) {
 			if ("true".equals(iu.getProperty(QueryUtil.PROP_TYPE_CATEGORY)) || //
 					A_JRE_JAVASE_ID.equals(iu.getId())) {
 				continue;
@@ -1015,6 +1017,26 @@ public class SBOMGenerator extends AbstractApplication {
 		return QueryUtil.compoundQueryable(getSourceMetadataRepositories()).query(query, monitor);
 	}
 
+	private IQueryResult<IInstallableUnit> queryRootIUs() {
+		var allIUs = query(QueryUtil.ALL_UNITS, null);
+		if (rootIUInclusions.pattern().isEmpty()) {
+			return allIUs;
+		}
+
+		var rootIUs = allIUs.stream().filter(iu -> {
+			var id = iu.getId();
+			return rootIUInclusions.matcher(id).matches()
+					|| rootIUInclusions.matcher(id + ":" + iu.getVersion()).matches();
+		}).collect(Collectors.toSet());
+		var slice = new PermissiveSlicer(allIUs, Map.of(), true, true, true, false, false) {
+			@Override
+			protected boolean isApplicable(IRequirement requirement) {
+				return !isExcluded(requirement);
+			}
+		}.slice(rootIUs, null);
+		return slice.query(QueryUtil.ALL_UNITS, null);
+	}
+
 	private void loadRepositories(URI uri, Set<Integer> types, IProgressMonitor monitor) throws ProvisionException {
 		var repositoryDescriptor = new RepositoryDescriptor();
 		if (types.size() == 1) {
@@ -1348,9 +1370,8 @@ public class SBOMGenerator extends AbstractApplication {
 				try {
 					var uri = sourceArtifactDescriptor.getRepository().getLocation().resolve("./"
 							+ artifactKey.getClassifier() + "-" + artifactKey.getId() + "-" + artifactKey.getVersion());
-					var sourceBytes = byteCache.getBytes(uri,
-							it -> getArtifactBytes(sourceArtifactDescriptor.getRepository(), sourceArtifactDescriptor));
-
+					var sourceBytes = contentHandler.getBinaryContent(uri,
+							() -> getArtifactBytes(sourceArtifactDescriptor.getRepository(), sourceArtifactDescriptor));
 					if (equivalent(bytes, sourceBytes, new ArrayList<>())) {
 						basicLocation = sourceArtifactDescriptor.getRepository().getLocation();
 					}
@@ -1496,6 +1517,22 @@ public class SBOMGenerator extends AbstractApplication {
 	}
 
 	private byte[] getArtifactBytes(IArtifactRepository repository, IArtifactDescriptor artifactDescriptor) {
+		var artifactDescriptorRepository = artifactDescriptor.getRepository();
+		if (artifactDescriptorRepository instanceof SimpleArtifactRepository simpleArtifactRepository) {
+			var location = simpleArtifactRepository.getLocation(artifactDescriptor);
+			if (location != null && !"file".equals(location.getScheme())) {
+				try {
+					return contentHandler.getBinaryContent(location,
+							() -> basicGetArtifactBytes(repository, artifactDescriptor));
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+		}
+		return basicGetArtifactBytes(repository, artifactDescriptor);
+	}
+
+	private byte[] basicGetArtifactBytes(IArtifactRepository repository, IArtifactDescriptor artifactDescriptor) {
 		for (var retry = 0;; ++retry) {
 			var out = new ByteArrayOutputStream();
 			var status = repository.getRawArtifact(artifactDescriptor, out, new NullProgressMonitor());
@@ -2196,8 +2233,8 @@ public class SBOMGenerator extends AbstractApplication {
 				if (jsonOutput != null) {
 					var output = Path.of(jsonOutput).toAbsolutePath();
 					outputs.add(output);
+					Files.createDirectories(output.getParent());
 					Files.writeString(output, jsonString);
-
 				}
 			} catch (Exception ex) {
 				throw new RuntimeException(ex);

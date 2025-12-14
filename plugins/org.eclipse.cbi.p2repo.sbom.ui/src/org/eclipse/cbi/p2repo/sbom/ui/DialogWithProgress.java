@@ -157,7 +157,7 @@ public abstract class DialogWithProgress extends Dialog {
 		try {
 			ModalContext.run(monitor -> {
 				try {
-					SBOMApplication.generate(args, new ProgressMonitorWrapper(monitor) {
+					new SBOMApplication.Generator(args).generate(new ProgressMonitorWrapper(monitor) {
 						@Override
 						public void beginTask(String name, int totalWork) {
 							checkCanceled();

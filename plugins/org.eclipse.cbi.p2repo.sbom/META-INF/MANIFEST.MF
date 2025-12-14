@@ -7,7 +7,7 @@ Bundle-Vendor: %providerName
 Bundle-Version: 0.1.0.qualifier
 Bundle-ClassPath: .
 Bundle-Localization: plugin
-Bundle-RequiredExecutionEnvironment: JavaSE-17
+Bundle-RequiredExecutionEnvironment: JavaSE-21
 Export-Package: org.eclipse.cbi.p2repo.sbom
 Import-Package: com.ctc.wstx.api,
  com.ctc.wstx.stax,
@@ -28,6 +28,7 @@ Import-Package: com.ctc.wstx.api,
  org.eclipse.equinox.app,
  org.eclipse.equinox.internal.p2.artifact.repository.simple,
  org.eclipse.equinox.internal.p2.core,
+ org.eclipse.equinox.internal.p2.director,
  org.eclipse.equinox.internal.p2.metadata,
  org.eclipse.equinox.internal.p2.metadata.repository.io,
  org.eclipse.equinox.p2.core,

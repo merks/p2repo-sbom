@@ -20,7 +20,9 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -39,23 +41,76 @@ public class SBOMApplication implements IApplication {
 
 	@Override
 	public Object start(IApplicationContext context) throws Exception {
-		generate(getArguments(context), new NullProgressMonitor());
+		new Generator(getArguments(context)).generate(new NullProgressMonitor());
 		return EXIT_OK;
 	}
 
-	public static void generate(List<String> arguments, IProgressMonitor monitor) throws Exception {
-		var args = new ArrayList<>(arguments);
-		var sbomGeneratorResults = new ArrayList<SBOMGenerator.Result>();
-		var installationsFolder = getArgument("-installations", args, null);
-		var verbose = getArgument("-verbose", args);
-		var byteCache = args.contains("-strict-p2-source-repositories")
-				? Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.byte-cache")
-				: null;
-		if (byteCache != null) {
-			byteCache.toFile().deleteOnExit();
+	@Override
+	public void stop() {
+	}
+
+	public static class Generator {
+		private final List<String> originalArguments;
+
+		private final Map<SBOMGenerator.Result, String> sbomGeneratorResults = new LinkedHashMap<>();
+
+		public Generator(List<String> arguments) {
+			originalArguments = new ArrayList<>(arguments);
 		}
 
-		if (installationsFolder != null) {
+		public void generate(IProgressMonitor monitor) throws Exception {
+			var args = new ArrayList<>(originalArguments);
+			var installationsFolder = getArgument("-installations", args, null);
+			var verbose = getArgument("-verbose", args);
+			if (verbose) {
+				args.add(0, "-verbose");
+			}
+
+			Path temporaryCache = null;
+			if (!args.contains("-cache")) {
+				temporaryCache = Files.createTempDirectory("org.eclipse.cbi.p2repo.sbom.cache");
+				temporaryCache.toFile().deleteOnExit();
+				var index = verbose ? 1 : 0;
+				args.add(index, "-cache");
+				args.add(index + 1, temporaryCache.toString());
+			}
+
+			try {
+				if (installationsFolder != null) {
+					generateInstallations(installationsFolder, args, monitor);
+				} else {
+					var slices = getArguments("-slices", args, List.of());
+					if (!slices.isEmpty()) {
+						generateSlices(slices, args, monitor);
+					} else {
+						sbomGeneratorResults.put(new SBOMGenerator(args).generate(monitor), null);
+					}
+				}
+			} finally {
+				if (temporaryCache != null) {
+					IOUtil.delete(temporaryCache);
+				}
+			}
+
+			var index = getArgument("-index", args, null);
+			if (index != null) {
+				var indexPath = Path.of(index).toAbsolutePath();
+				if (verbose) {
+					System.out.println("Generating Index: " + index);
+				}
+				var render = getArgument("-renderer", args, SBOM_RENDERER_URI.toString());
+				generateIndex(indexPath, URI.create(render), sbomGeneratorResults);
+
+				var previewRedirections = parseRedirections(getArguments("-preview", args, List.of()));
+				var redirectedIndex = previewRedirections.redirect(toURI(indexPath));
+				if (!"file".equals(redirectedIndex.getScheme())) {
+					URIUtil.openURL(redirectedIndex);
+				}
+			}
+		}
+
+		private void generateInstallations(String installationsFolder, List<String> args, IProgressMonitor monitor)
+				throws Exception {
 			var installationPattern = Pattern
 					.compile(getArgument("-installation-pattern", args, ".*\\.(zip|tar|tar.gz)$"));
 			var xmlOutputsFolder = getArgument("-xml-outputs", args, null);
@@ -66,9 +121,6 @@ public class SBOMApplication implements IApplication {
 				var progress = SubMonitor.convert(monitor, paths.size());
 				for (Path path : paths) {
 					var effectiveArgs = new ArrayList<>(args);
-					if (verbose) {
-						effectiveArgs.add(0, "-verbose");
-					}
 					effectiveArgs.add("-installation");
 					effectiveArgs.add(path.toString());
 					if (xmlOutputsFolder != null) {
@@ -81,148 +133,155 @@ public class SBOMApplication implements IApplication {
 						effectiveArgs.add(jsonOutputsFolder + "/"
 								+ path.getFileName().toString().replaceAll("\\.(zip|tar|tar.gz)$", "-sbom.json"));
 					}
-					if (byteCache != null) {
-						effectiveArgs.add("-byte-cache");
-						effectiveArgs.add(byteCache.toString());
-					}
-					sbomGeneratorResults.add(
-							new SBOMGenerator(effectiveArgs).generate(progress.split(1, SubMonitor.SUPPRESS_NONE)));
+					sbomGeneratorResults.put(
+							new SBOMGenerator(effectiveArgs).generate(progress.split(1, SubMonitor.SUPPRESS_NONE)),
+							null);
 				}
 			}
-		} else {
-			var effectiveArgs = new ArrayList<>(args);
-			if (verbose) {
-				effectiveArgs.add(0, "-verbose");
-			}
-			sbomGeneratorResults.add(new SBOMGenerator(effectiveArgs).generate(monitor));
 		}
 
-		var index = getArgument("-index", args, null);
-		if (index != null) {
-			var indexPath = Path.of(index).toAbsolutePath();
-			if (verbose) {
-				System.out.println("Generating Index: " + index);
-			}
-			var render = getArgument("-renderer", args, SBOM_RENDERER_URI.toString());
-			generateIndex(indexPath, arguments, URI.create(render), sbomGeneratorResults);
+		private void generateSlices(List<String> slices, List<String> args, IProgressMonitor monitor) throws Exception {
+			var xmlOutputsFolder = getArgument("-xml-outputs", args, null);
+			var jsonOutputsFolder = getArgument("-json-outputs", args, null);
+			var progress = SubMonitor.convert(monitor, slices.size());
+			var SLICE_PATTERN = Pattern.compile("(?<name>.+)=(?<pattern>.+)");
+			for (var slice : slices) {
+				var matcher = SLICE_PATTERN.matcher(slice);
+				if (!matcher.matches()) {
+					throw new IllegalAccessException("Expecting name=pattern: " + slice);
+				}
+				var name = matcher.group("name");
+				var pattern = matcher.group("pattern");
 
-			var previewRedirections = parseRedirections(getArguments("-preview", args, List.of()));
-			var redirectedIndex = previewRedirections.redirect(toURI(indexPath));
-			if (!"file".equals(redirectedIndex.getScheme())) {
-				URIUtil.openURL(redirectedIndex);
+				var effectiveArgs = new ArrayList<>(args);
+				effectiveArgs.add("-root-iu-inclusions");
+				effectiveArgs.add(pattern);
+				if (xmlOutputsFolder != null) {
+					effectiveArgs.add("-xml-output");
+					effectiveArgs.add(xmlOutputsFolder + "/" + name + "-sbom.xml");
+				}
+				if (jsonOutputsFolder != null) {
+					effectiveArgs.add("-json-output");
+					effectiveArgs.add(xmlOutputsFolder + "/" + name + "-sbom.json");
+				}
+				sbomGeneratorResults.put(
+						new SBOMGenerator(effectiveArgs).generate(progress.split(1, SubMonitor.SUPPRESS_NONE)), name);
 			}
 		}
-	}
 
-	private static void generateIndex(Path indexPath, List<String> arguments, URI renderer,
-			List<SBOMGenerator.Result> sbomGeneratorResults) throws IOException {
-		var html = """
-				<!DOCTYPE html>
-				<html lang=en>
-				<head>
-					<title>SBOM Index</title>
-					<link rel="icon" type="image/ico" href="https://download.eclipse.org/cbi/sbom/favicon.ico">
-						<style>
-							img {
-								max-height: 3ex;
-							}
-							td {
-								vertical-align: top;
-							}
+		private void generateIndex(Path indexPath, URI renderer, Map<SBOMGenerator.Result, String> sbomGeneratorResults)
+				throws IOException {
+			var html = """
+					<!DOCTYPE html>
+					<html lang=en>
+					<head>
+						<title>SBOM Index</title>
+						<link rel="icon" type="image/ico" href="https://download.eclipse.org/cbi/sbom/favicon.ico">
+							<style>
+								img {
+									max-height: 3ex;
+								}
+								td {
+									vertical-align: top;
+								}
 
-						</style>
-				</head>
-				<body>
-					<table>
-						${items}
-					</table>
+							</style>
+					</head>
+					<body>
+						<table>
+							${items}
+						</table>
 
-					<details>
-						<summary>Arguments</summary>
-						<pre>${args}</pre>
-					</details>
-
-					<script>
-						// This allows the arguments to the file query parameter to be relative such that the folder with the index.html and the SBOMs is portable.
-						for (const a of document.querySelectorAll('a')) {
-							const href = a.href;
-							const match = /(?<renderer>.*\\?file=)(?<file>.*)/.exec(href);
-							if (match) {
-								const renderer = match.groups.renderer;
-								const file = match.groups.file;
-								const resolvedURL = new URL(file, location);
-								a.href = `${renderer}${resolvedURL}`;
-							}
-						}
-					</script>
-				</body>
-				</html>
-				""";
-
-		html = html.replace("${title}", "SBOM Index");
-		html = html.replace("${args}", toString(arguments));
-
-		var items = new ArrayList<String>();
-		for (var sbomGenerator : sbomGeneratorResults) {
-			var content = new ArrayList<String>();
-			content.add("""
-					<td>
 						<details>
-							<summary></summary>
-							<pre style="font-size: 85%">${args}</pre>
+							<summary>Arguments</summary>
+							<pre>${args}</pre>
 						</details>
-					</td>
-					""".replace("${args}", toString(sbomGenerator.arguments())));
 
-			var inputs = sbomGenerator.inputs();
-			var inputLinks = inputs.stream().map(SBOMApplication::toLink)
-					.collect(Collectors.joining("<br/>", "<td>", "</td>"));
-			content.add(inputLinks);
+						<script>
+							// This allows the arguments to the file query parameter to be relative such that the folder with the index.html and the SBOMs is portable.
+							for (const a of document.querySelectorAll('a')) {
+								const href = a.href;
+								const match = /(?<renderer>.*\\?file=)(?<file>.*)/.exec(href);
+								if (match) {
+									const renderer = match.groups.renderer;
+									const file = match.groups.file;
+									const resolvedURL = new URL(file, location);
+									a.href = `${renderer}${resolvedURL}`;
+								}
+							}
+						</script>
+					</body>
+					</html>
+					""";
 
-			var outputs = sbomGenerator.outputs();
-			for (var output : outputs) {
-				var relativePath = indexPath.getParent().relativize(output).toString();
-				var label = relativePath.endsWith(".json") ? "json" : "xml";
-				var hrefs = """
+			html = html.replace("${title}", "SBOM Index");
+			html = html.replace("${args}", toString(originalArguments));
+
+			var items = new ArrayList<String>();
+			for (var entry : sbomGeneratorResults.entrySet()) {
+				var sbomGenerator = entry.getKey();
+				var content = new ArrayList<String>();
+				content.add("""
 						<td>
-							<a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a>
+							<details>
+								<summary></summary>
+								<pre style="font-size: 85%">${args}</pre>
+							</details>
 						</td>
-						<td>
-							<a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a>
-						</td>
+						""".replace("${args}", toString(sbomGenerator.arguments())));
+
+				var inputs = sbomGenerator.inputs();
+				var inputLinks = inputs.stream().map(Generator::toLink)
+						.collect(Collectors.joining("<br/>", "<td>", "</td>"));
+				content.add(inputLinks);
+
+				var name = entry.getValue();
+				if (name != null) {
+					content.add("<td><b>" + name + "</b></td>");
+				}
+
+				var outputs = sbomGenerator.outputs();
+				for (var output : outputs) {
+					var relativePath = indexPath.getParent().relativize(output).toString();
+					var label = relativePath.endsWith(".json") ? "json" : "xml";
+					var hrefs = """
+							<td>
+								<a href="${renderer}/?file=${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Rendered&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a>
+							</td>
+							<td>
+								<a href="${file}"><img src="https://img.shields.io/static/v1?logo=eclipseide&label=Raw&message=${label}&style=for-the-badge&logoColor=gray&labelColor=rgb(255,164,44)&color=gray"/></a>
+							</td>
+							""";
+					hrefs = hrefs //
+							.replace("${renderer}", renderer.toString()) //
+							.replace("${file}", relativePath) //
+							.replace("${label}", label);
+					content.add(hrefs);
+				}
+
+				var item = """
+						<tr>
+							${content}
+						</tr>
 						""";
-				hrefs = hrefs //
-						.replace("${renderer}", renderer.toString()) //
-						.replace("${file}", relativePath) //
-						.replace("${label}", label);
-				content.add(hrefs);
+				items.add(item.replace("${content}", String.join("\n", content).replace("\n", "\n	")));
 			}
 
-			var item = """
-					<tr>
-						${content}
-					</tr>
-					""";
-			items.add(item.replace("${content}", String.join("\n", content).replace("\n", "\n	")));
+			var formattedItems = String.join("\n", items).replace("\n", "\n		");
+			html = html.replace("${items}", formattedItems);
+			Files.writeString(indexPath, html);
 		}
 
-		var formattedItems = String.join("\n", items).replace("\n", "\n		");
-		html = html.replace("${items}", formattedItems);
-		Files.writeString(indexPath, html);
-	}
+		private static String toString(List<String> arguments) {
+			return arguments.stream().map(it -> !it.startsWith("-") ? "  " + it : it)
+					.collect(Collectors.joining("&#10;"));
+		}
 
-	private static String toString(List<String> arguments) {
-		return arguments.stream().map(it -> !it.startsWith("-") ? "  " + it : it).collect(Collectors.joining("&#10;"));
-	}
-
-	private static String toLink(URI uri) {
-		var value = uri.toString();
-		var archiveMatcher = ARCHIVE_PATTERN.matcher(value);
-		var baseURI = archiveMatcher.matches() ? archiveMatcher.group(1) : value;
-		return "<a href='" + baseURI + "'>" + baseURI + "</a>";
-	}
-
-	@Override
-	public void stop() {
+		private static String toLink(URI uri) {
+			var value = uri.toString();
+			var archiveMatcher = ARCHIVE_PATTERN.matcher(value);
+			var baseURI = archiveMatcher.matches() ? archiveMatcher.group(1) : value;
+			return "<a href='" + baseURI + "'>" + baseURI + "</a>";
+		}
 	}
 }

@@ -7,7 +7,7 @@ Bundle-Vendor: %providerName
 Bundle-Version: 0.1.0.qualifier
 Bundle-ClassPath: .
 Bundle-Localization: plugin
-Bundle-RequiredExecutionEnvironment: JavaSE-17
+Bundle-RequiredExecutionEnvironment: JavaSE-21
 Require-Bundle: org.eclipse.cbi.p2repo.sbom,
  json,
  org.eclipse.core.runtime,

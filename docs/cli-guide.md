@@ -97,10 +97,6 @@ This is used to avoid repeated transfers of remote resources.
 The cache can be reused across multiple invocations of the generator to improve performance.
 It's particularly useful with the `clearly-defined` option given the failure-prone server involved.
 
-### `-byte-cache` `<folder>`
-
-Specify a folder for a binary cache used for caching binary artifact bytes.
-This is generally not a user-specified option.
 
 ## Redirection
 
@@ -184,7 +180,7 @@ and add any advisory/external references found by such queries.
 Specify to query [ClearlyDefined](https://clearlydefined.io/) metadata for Maven coordinates to add declared license info as a component property.
 The server is notoriously prone to network failure.
 
-### `--minimize-root-dependencies`
+### `-minimize-root-dependencies`
 
 Specify to minimize the dependencies of the SBOM's metadata component to be the roots of the dependency graph induced by all of the SBOM's components.
 By default the SBOM's metadata component depends directly on directly on all components of the SBOM.
@@ -192,7 +188,8 @@ By default the SBOM's metadata component depends directly on directly on all com
 
 ## Component Filters
 
-In some cases, it can be useful to exclude components from an SBOM.
+In some cases, it can be useful to exclude components from an SBOM,
+or to include only a slice or subset of the available components.
 For example,
 for [dependency-track](https://dependencytrack.org/)
 only [bundle components](overview.md#bundle-mapping) are of general tracking interest
@@ -224,6 +221,14 @@ For example, the current [SimRel](https://eclipse.dev/simel) repository contains
 -expected-missing-artifact-iu-patterns
 org\.eclipse\.(help|jdt|pde|pde\.spies|platform|rcp)\.source\.feature\.group:.*
 ```
+
+### `-slice` `<pattern>`+
+
+Specify one or more regular expressions that will be applied  to match,
+i.e., select, the names of the so-called root components.
+The transitive closure of the dependencies of the selected components will be included in the SBOM.
+In other words, only a slice of all available components will be included in the SBOM.
+
 
 ## Dependency Filters
 
@@ -278,7 +283,7 @@ Specify to write the CycloneDX SBOM JSON to the given file.
 
 ---
 
-## Generating SBOMs for Multiple Installations
+## Generating SBOMs for Multiple Installations or Slices
 
 The CBI p2 SBOM Generator Application provides a wrapper around the CBI p2 SBOM Generator.
 It provides support for generating an HTML index with links to the SBOM as well as links to the renderer for those SBOMs.
@@ -287,12 +292,22 @@ In addition, it provides support for generating SBOMs for a folder containing mu
 ### `-installations` `<folder>`
 
 Specifies a folder containing product archives, i.e., `*.zip`, `*.tar`, or `*.tar.gz`.
+
 The SBOM generator will be invoked separately for each installation.
+<a href="#-installation-path-or-uri">See `-installation`</a>.
 
 ### `-installation-pattern` `<pattern>`
 
 Specify the pattern for installation archives.
 The default when no pattern is specified is `.*\.(zip|tar|tar.gz)$`
+
+### `-slices` `<slice-spec>`+
+
+Specifies one or more `<slice-specs>` instances of the form `<name>=<pattern>`.
+
+The SBOM generator will be invoked separately for each slice.
+<a href="#-slice-pattern">See `-slice`</a>.
+
 
 ### `-xml-outputs` `<folder>`
 
@@ -304,17 +319,28 @@ Specify the folder in which to generate a JSON SBOM for each installation.
 
 ### Multiple Invocation Mode
 
+#### Multiple Installations
+
 For each matching installation `<installation-path>` in the `-installations` folder, the following processing is invoked:
 - The effective arguments for the p2 SBOM generator invocation are a copy of the application arguments with the application-specific arguments removed.
 - The invocation specifies `-installation` `<installation-path>` to generate an SBOM for that installation.
-- If `-xml-outputs <folder>` is specified, the invocation specifies `-xml-output` `<folder>/<installation-base-name>-sbom.xml`.
-- If `-json-outputs <folder>` is specified, the invocation specifies `-json-output` `<folder>/<installation-base-name>-sbom.json`.
-- If `-strict-p2-source-repositories` is specified, a temporary byte cache folder `<byte-cache>` is created and the invocation specifies `-byte-cache <byte-cache>`.
+- If `-xml-outputs` `<folder>` is specified, the invocation specifies `-xml-output` `<folder>/<installation-base-name>-sbom.xml`.
+- If `-json-outputs` `folder>` is specified, the invocation specifies `-json-output` `<folder>/<installation-base-name>-sbom.json`.
+
+#### Multiple Slices
+
+For each `<slice-spec>` of the form `<name>=<pattern>` in the `-slices`, the following processing is invoked:
+- The effective arguments for the p2 SBOM generator invocation are a copy of the application arguments with the application-specific arguments removed.
+- The invocation specifies `-slice` `<pattern>` to generate an SBOM for that slice; note that `|` can be use to specify multiple patterns as single pattern.
+- If `-xml-outputs` `<folder>` is specified, the invocation specifies `-xml-output` `<folder>/<name>-sbom.xml`.
+- If `-json-outputs` `<folder>` is specified, the invocation specifies `-json-output` `<folder>/<name>-sbom.json`.
 
 ### Single Invocation Mode
 
- If `-installations` is **not** specified, the p2 SBOM generator is invoked with a copy of the application arguments with the application-specific arguments removed.
-In this case the caller is expected to have provided `-installation`, `-inputs`, or other input arguments.
+If neither `-installations` nor `-slices` are specified,
+the p2 SBOM generator is invoked with a copy of the application arguments.
+In this case the caller is expected to have provided `-installation`, `-inputs`, or other input arguments,
+as well as specific [output arguments](#output).
 
 
 ### Index and Rendering
