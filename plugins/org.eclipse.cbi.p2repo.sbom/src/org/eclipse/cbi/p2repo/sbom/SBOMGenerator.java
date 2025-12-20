@@ -141,8 +141,13 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private static final String A_JRE_JAVASE_ID = "a.jre.javase";
 
+	private static final Pattern IGNORED_LICENSE_URL_PATTERN = Pattern.compile(String.join("|",
+			List.of("https://github.com/[^/]+/[^/]+/(commit/.*|issues)", ".*\\.(xsd|dtd|java|xml)",
+					"https://github.com/microsoft/vscode/tree/.*", "https://mail-archives.apache.org/.*",
+					"https://www.w3.org/TR/.*", "https://dev.eclipse.org/mhonarc/.*", "https://issues.apache.org/.*")));
+
 	private static final Pattern ACCEPTED_LICENSE_URL_PATTERN = Pattern
-			.compile(".*(documents/e[dp]l-v10|epl-v20|legal|licen[cs]e|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
+			.compile(".*(documents/e[dp]l-v10|epl-v20|epl-2.0|legal|licen[cs]e|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern POTENTIAL_LICENSE_REFERENCE_PATTERN = Pattern
 			.compile("href=['\"]https?://(.*?)[/\r\n ]*['\"]");
@@ -198,6 +203,8 @@ public class SBOMGenerator extends AbstractApplication {
 	private final Set<IMetadataRepository> metadataRepositories = new LinkedHashSet<>();
 
 	private final Map<IArtifactKey, IInstallableUnit> artifactIUs = new TreeMap<>(ARTIFACT_COMPARATOR);
+
+	private final Map<IArtifactKey, IInstallableUnit> includedArtifactIUs = new TreeMap<>(ARTIFACT_COMPARATOR);
 
 	private final Map<IArtifactKey, IArtifactDescriptor> artifactDescriptors = new HashMap<>();
 
@@ -578,7 +585,8 @@ public class SBOMGenerator extends AbstractApplication {
 			var component = createComponent(iu);
 			iuComponents.put(iu, component);
 
-			var artifactDescriptor = artifactDescriptors.get(entry.getKey());
+			var artifactKey = entry.getKey();
+			var artifactDescriptor = artifactDescriptors.get(artifactKey);
 			var bomRef = setBomRef(component, artifactDescriptor);
 
 			var dependency = new Dependency(bomRef);
@@ -599,12 +607,15 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 
 			var isExcluded = componentExclusions.matcher(iu.getId()).matches()
-					|| classifierExclusions.matcher(entry.getKey().getClassifier()).matches();
+					|| classifierExclusions.matcher(artifactKey.getClassifier()).matches();
 			if (isExcluded) {
 				excludedComponents.add(bomRef);
-			} else if (!dependencyIUs.contains(iu)) {
-				bom.addComponent(component);
-				bom.addDependency(dependency);
+			} else {
+				includedArtifactIUs.put(artifactKey, iu);
+				if (!dependencyIUs.contains(iu)) {
+					bom.addComponent(component);
+					bom.addDependency(dependency);
+				}
 			}
 		}
 
@@ -620,13 +631,13 @@ public class SBOMGenerator extends AbstractApplication {
 	private class ArtifactAnalyzer {
 		private final AtomicInteger completed = new AtomicInteger();
 		private final AtomicInteger inProgress = new AtomicInteger();
-		private final AtomicInteger remaining = new AtomicInteger(artifactIUs.size());
+		private final AtomicInteger remaining = new AtomicInteger(includedArtifactIUs.size());
 		private final SubMonitor progress;
 		private final Map<IInstallableUnit, Dependency> iusToDependencies;
 
 		public ArtifactAnalyzer(Map<IInstallableUnit, Dependency> iusToDependencies, IProgressMonitor monitor) {
 			this.iusToDependencies = iusToDependencies;
-			progress = SubMonitor.convert(monitor, "Processing Artifacts", artifactIUs.size());
+			progress = SubMonitor.convert(monitor, "Processing Artifacts", includedArtifactIUs.size());
 		}
 
 		private void update() {
@@ -673,7 +684,7 @@ public class SBOMGenerator extends AbstractApplication {
 			// Gather details from the actual artifacts in parallel.
 			var executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
 			var futures = new LinkedHashSet<Future<?>>();
-			for (var entry : artifactIUs.entrySet()) {
+			for (var entry : includedArtifactIUs.entrySet()) {
 				var iu = entry.getValue();
 				if (processDependencyIUs) {
 					if (!dependencyIUs.contains(iu)) {
@@ -1800,7 +1811,7 @@ public class SBOMGenerator extends AbstractApplication {
 			if (ACCEPTED_LICENSE_URL_PATTERN.matcher(url).matches()) {
 				allLicenses.add(url);
 				urls.add(url);
-			} else if (!url.endsWith(".xsd") && !url.endsWith(".dtd")) {
+			} else if (!IGNORED_LICENSE_URL_PATTERN.matcher(url).matches()) {
 				rejectedURLs.add(url);
 			}
 		}
