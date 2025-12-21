@@ -142,9 +142,11 @@ public class SBOMGenerator extends AbstractApplication {
 	private static final String A_JRE_JAVASE_ID = "a.jre.javase";
 
 	private static final Pattern IGNORED_LICENSE_URL_PATTERN = Pattern.compile(String.join("|",
-			List.of("https://github.com/[^/]+/[^/]+/(commit/.*|issues)", ".*\\.(xsd|dtd|java|xml)",
+			List.of("https://[^/]+", "https://github.com/[^/]+/[^/]+/(commit/.*|issues)", ".*\\.(xsd|dtd|java|xml)",
 					"https://github.com/microsoft/vscode/tree/.*", "https://mail-archives.apache.org/.*",
-					"https://www.w3.org/TR/.*", "https://dev.eclipse.org/mhonarc/.*", "https://issues.apache.org/.*")));
+					"https://schemas.xmlsoap.org/.*", "https://www.w3.org/TR/.*", "https://dev.eclipse.org/mhonarc/.*",
+					"https://www.sun.com/.*", "https://www.omg.org/(docs|spec|technology)/.*",
+					"https://issues.apache.org/.*")));
 
 	private static final Pattern ACCEPTED_LICENSE_URL_PATTERN = Pattern
 			.compile(".*(documents/e[dp]l-v10|epl-v20|epl-2.0|legal|licen[cs]e|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
