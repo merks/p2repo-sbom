@@ -148,8 +148,8 @@ public class SBOMGenerator extends AbstractApplication {
 					"https://www.sun.com/.*", "https://www.omg.org/(docs|spec|technology)/.*",
 					"https://issues.apache.org/.*")));
 
-	private static final Pattern ACCEPTED_LICENSE_URL_PATTERN = Pattern
-			.compile(".*(documents/e[dp]l-v10|epl-v20|epl-2.0|legal|licen[cs]e|/MPL).*[^/]", Pattern.CASE_INSENSITIVE);
+	private static final Pattern ACCEPTED_LICENSE_URL_PATTERN = Pattern.compile(
+			".*(documents/e[dp]l-v10|epl-v20|epl-2.0|legal|licen[cs]e|/MPL)(.*[^/])?", Pattern.CASE_INSENSITIVE);
 
 	private static final Pattern POTENTIAL_LICENSE_REFERENCE_PATTERN = Pattern
 			.compile("href=['\"]https?://(.*?)[/\r\n ]*['\"]");

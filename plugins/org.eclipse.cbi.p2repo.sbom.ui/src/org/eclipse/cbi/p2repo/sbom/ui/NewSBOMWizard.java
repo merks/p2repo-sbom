@@ -130,7 +130,7 @@ public class NewSBOMWizard extends Wizard implements INewWizard {
 
 			locationText = WidgetFactory.text(SWT.BORDER)
 					.text(initialContainer == null ? "" : initialContainer.getFullPath().toString())
-					.message("The workspace foldekjr into which to generate the results")
+					.message("The workspace folder into which to generate the results")
 					.layoutData(new GridData(SWT.FILL, SWT.CENTER, true, false))//
 					.onModify(e -> {
 						validate();

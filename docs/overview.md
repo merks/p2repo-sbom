@@ -116,7 +116,7 @@ The components of a generated SBOM are mapped as follows:
 
 A bundle unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It corresponds to both an installable unit as well as that unit's associated artifact.
-```
+```xml
 <unit id='org.example.abc' version='1.1.0.v20250601-0000' generation='2'>
   <update id='org.example.abc' range='[0.0.0,1.1.0.v20250601-0000)' severity='0'/>
   <provides size='10'>
@@ -150,7 +150,7 @@ A feature unit is a component of type [library](https://cyclonedx.org/docs/1.6/j
 It corresponds to a pair of installable units, `*.feature.group` and `*.feature.jar`,
 where `*` is the base ID,
 as well the units' associated artifact ID.
-```
+```xml
 <unit id='org.example.abc.feature.group' version='1.0.0.v20250601-000' singleton='false'>
   <update id='org.example.abc.feature.group' range='[0.0.0,1.0.0.v20250601-000)' severity='0'/>
   <provides size='2'>
@@ -206,7 +206,7 @@ i.e., analogous to the mapping of the artifact in an artifact repository.
 
 A binary unit is a component of type [library](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It corresponds to both an installable unit as well as that unit's associated artifact.
-```
+```xml
 <unit id='org.example.abc.executable_root.gtk.linux.x86_64' version='1.0.0.v20250601-000'>
   <provides size='1'>
     <provided namespace='org.eclipse.equinox.p2.iu' name='org.example.abc.executable_root.gtk.linux.x86_64'
@@ -254,7 +254,7 @@ i.e., analogous to the mapping of the artifact in the artifact repository.
 
 A metadata unit is a component of type [data](https://cyclonedx.org/docs/1.6/json/#components_items_type).
 It is a logical component for which no corresponding physical artifact exists.
-```
+```xml
 <unit id='toolingorg.example.abc.ini.gtk.linux.x86_64' version='1.0.0.v20250601-000' singleton='false'>
   <provides size='2'>
     <provided namespace='org.eclipse.equinox.p2.iu' name='toolingorg.example.abc.ini.gtk.linux.x86_64'
