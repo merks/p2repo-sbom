@@ -56,7 +56,7 @@ but the folder itself need not yet exist
 and will be created by the generator,
 e.g., here `eclipse-sdk`.
 A number `Template` choices are available,
-but you can change the text to specify specify any valid [command line arguments](cli-guide.md).
+but you can change the text to specify any valid [command line arguments](cli-guide.md).
 
 ![](assets/new-sbom-wizard-main.png)
 
@@ -72,6 +72,6 @@ The integrated SBOM render supports opening an `index.html` which provides links
 
 ![](assets/ide-render-index.png)
 
-This can optionall be automatically opeened by the [New SBOM Wizard](#new-sbom-wizard).
+This can optionally be automatically opened by the [New SBOM Wizard](#new-sbom-wizard).
 At any later point in time,
  you can use the context menu's `Open With → Renderer` to open the integrated SBOM renderer. 
