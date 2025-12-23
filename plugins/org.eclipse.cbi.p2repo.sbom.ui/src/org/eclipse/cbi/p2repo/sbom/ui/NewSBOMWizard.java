@@ -81,7 +81,7 @@ public class NewSBOMWizard extends Wizard implements INewWizard {
 						-advisory
 						-process-bundle-classpath
 						-input
-						https://download.eclipse.org/jdtls/milestones/1.51.0/repository
+						https://download.eclipse.org/eclipse/updates/latest
 						"""), //
 				Map.entry("SBOM of Local Installation", """
 						-central-search
