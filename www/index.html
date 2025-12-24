@@ -1709,6 +1709,8 @@ ${componentElements.join('\n')}
 				<input class="input-type" type="radio" id="input-url" name="input" onclick="changeInputType()">
 				<label for="input-url">SBOM URL</label>
 
+				<img onclick="popup('help-input')" alt="help" src="help.svg">
+
 				<div class="input-section" id="input-text-section">
 					<!--
 				<label for="sbom-input">Enter SBOM Text</label><br>
@@ -1855,6 +1857,31 @@ ${componentElements.join('\n')}
 
 		<div id="popup" class="modal-popup">
 			<span class="modal-popup-close">&times;</span>
+			<div id="help-input" class="modal-popup-description">
+				<div>
+					<h3>SBOM Input</h3>
+					<p>
+						The renderer provides three ways of specifying the SBOM to render.
+					</p>
+					<dl>
+						<dt>Text</dt>
+						<dd>
+							Copy and paste the full textual contents of an XML or JSON CycloneDX SBOM into the multi-line text field.
+						</dd>
+						<dt>File</dt>
+						<dd>
+							Upload a file containing an XML or JSON CycloneDX SBOM using the <code>Browse...</code> button.
+						</dd>
+						<dt>URL</dt>
+						<dd>
+							Enter an <code>https://</code> URL of a XML or JSON CycloneDX SBOM.
+							Due to <a href="https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Same-origin_policy">same-origin policy</a> restrictions,
+							the URL must be one from the same origin, i.e., <code id="same-origin">https://eclipse.org</code>.
+						</dd>
+					</dl>
+				</div>
+			</div>
+
 			<div id="help-unit" class="modal-popup-description">
 				<div>
 					<h3>Unit Category</h3>
@@ -2201,6 +2228,7 @@ ${componentElements.join('\n')}
 	</main>
 
 	<script>
+		document.getElementById('same-origin').innerText = window.location.origin;
 	</script>
 </body>
 

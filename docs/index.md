@@ -1,6 +1,6 @@
 # CBI p2 SBOM Generator
 
-The CBI p2 SBOM Generator supports generating a high-quality SBOM from a p2 repository or an Eclipse Installation.
+The CBI p2 SBOM Generator supports generating a high-quality Software Bill of Materials from a p2 repository or an Eclipse Installation.
 The generator provides the following:
 - A headless product to support a command line interface.
 - IDE integration to drive the generation process from within an IDE.

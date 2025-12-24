@@ -1,3 +1,28 @@
 # Web-based SBOM Renderer
 
-Under construction.
+The CBI p2 SBOM Generator provides a web-based renderer for viewing and analyzing SBOMs.
+It is designed to render [CycloneDX](https://cyclonedx.org/) SBOMs of the form 
+produced by the generator,
+produced by [tycho-sbom](overview.md#tycho-sbom),
+and as downloaded from [dependency-track](https://dependencytrack.org/).
+
+For use at `eclipse.org` the renderer is hosted at
+[https://download.eclipse.org/cbi/sbom/](https://download.eclipse.org/cbi/sbom/).
+The full content of the web site is available in the folder
+[https://github.com/eclipse-cbi/p2repo-sbom/tree/main/www](https://github.com/eclipse-cbi/p2repo-sbom/tree/main/www)
+and is easily hosted anywhere with no special host requirements.
+The [Integrated SBOM Renderer](ide-guide.md#integrated-sbom-renderer)
+[programmatically copies the site](https://github.com/eclipse-cbi/p2repo-sbom/blob/59f5dcf10ecc66a117202c0b81ed29bd93435233/plugins/org.eclipse.cbi.p2repo.sbom.ui/src/org/eclipse/cbi/p2repo/sbom/ui/SBOMRenderer.java#L181-L207)
+and starts a simple local web server to make the site available via `localhost`.
+
+## Dependency-track
+
+At `eclipse.org`,
+projects can use [`https://sbom.eclipse.org`](https://sbom.eclipse.org)
+to upload SBOMs and analyze them for vulnerabilities.
+The generator can be used to generate an SBOM that is uploaded to `sbom.eclipse.org`
+as described in the [Maven/Jenkins Integration](build-guide.md).
+Such an SBOM can subsequently be downloaded, enhanced with vulnerabilities details, for viewing in the renderer
+using `Components → Download BOM → Inventory with Vulnerabilities`:
+
+![](assets/dependency-track-download-sbom.png)
