@@ -64,11 +64,11 @@ Completing the wizard will start the generation process via a non-modal dialog:
 
 ![](assets/new-sbom-wizard-generate.png)
 
-If specified, the [integrated SBOM render](#integrated-sbom-renderer) will be automatically opened.
+If specified, the [integrated SBOM renderer](#integrated-sbom-renderer) will be automatically opened.
 
 ## SBOM Index Renderer
 
-The integrated SBOM render supports opening an `index.html` which provides links for both the rendered and raw results:
+The integrated SBOM renderer supports opening an `index.html` which provides links for both the rendered and raw results:
 
 ![](assets/ide-render-index.png)
 
