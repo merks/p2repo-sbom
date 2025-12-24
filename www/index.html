@@ -422,6 +422,7 @@
 	<script>
 		//<![CDATA[
 
+		const vulnerabilityBase = 'https://sbom.eclipse.org/vulnerabilities/';
 		const reset = '\u27F2';
 		const collapsed = '\u25B7';
 		const expanded = '\u25E2';
@@ -430,6 +431,7 @@
 		const hidden = '\u25BC';
 
 		const purlPattern = /^pkg:(?<scheme>[^/]+)\/((?<group>[^/]+)\/)?(?<name>[^&]+)@(?<version>[^/?]+)(?<query>\?.*|)$/;
+
 
 		const componentMap = new Map();
 		const incomingDependencyMap = new Map();
@@ -441,6 +443,7 @@
 		const p2Repositories = new Map();
 		const mavenRepositories = new Map();
 		const ids = new Map();
+		const vulnerabilitiesMap = new Map();
 
 		function clear() {
 			componentMap.clear();
@@ -452,6 +455,7 @@
 			p2Repositories.clear();
 			mavenRepositories.clear();
 			ids.clear();
+			vulnerabilitiesMap.clear();
 		}
 
 		function restore() {
@@ -728,13 +732,14 @@ ${getFormattedNotes(notes)}
 
 		function getReferenceElements(component) {
 			const references = getModelValue(component, 'externalReferences', []);
-			if (references != null) {
-				return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style="display:none">
+			const vulnerabilities = vulnerabilitiesMap.get(component);
+			if (vulnerabilities != null) {
+				references.unshift(...vulnerabilities);
+			}
+			return references.map(reference => `<div class="reference reference-${getClassName(getModelValue(reference, 'type'))}" style="display:none">
 					<img class="icon" src="reference.svg">
 ${getReferenceElementDetail(reference)}
 </div > `);
-			}
-			return [];
 		}
 
 		function getReferenceElementDetail(reference) {
@@ -1051,8 +1056,12 @@ ${getLicenseElementDetail(license)}
 
 			for (const component of getModelValue(sbom, 'components', [])) {
 				const bomRef = getModelValue(component, 'bom-ref');
-				componentMap.set(bomRef, component);
-				outgoingDependencyMap.set(component, []);
+				const purl = getModelValue(component, 'purl');
+				// We expect all components to have a PURL.
+				if (purl != null) {
+					componentMap.set(bomRef, component);
+					outgoingDependencyMap.set(component, []);
+				}
 			}
 
 			for (const dependency of getModelValue(sbom, 'dependencies', [])) {
@@ -1071,6 +1080,37 @@ ${getLicenseElementDetail(license)}
 					outgoingDependencyMap.get(incomingComponent).push(component);
 					return incomingComponent;
 				}).filter(component => component != null));
+			}
+
+			if (vulnerabilityBase != null) {
+				for (const vulnerability of getModelValue(sbom, 'vulnerabilities', [])) {
+					const id = getModelValue(vulnerability, 'id');
+					const source = getModelValue(vulnerability, 'source');
+					if (source != null && id != null) {
+						const name = getModelValue(source, 'name');
+						if (name != null) {
+							const advisory = {
+								'type': 'advisories',
+								'url': `${vulnerabilityBase}${name}/${id}`
+							};
+							const affects = getModelValue(vulnerability, 'affects', []);
+							for (const affect of affects) {
+								const ref = getModelValue(affect, 'ref');
+								if (ref != null) {
+									const component = componentMap.get(ref);
+									if (component != null) {
+										let advisotories = vulnerabilitiesMap.get(component);
+										if (advisotories == null) {
+											advisotories = [];
+											vulnerabilitiesMap.set(component, advisotories);
+										}
+										advisotories.push(advisory);
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 
