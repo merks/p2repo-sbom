@@ -1,4 +1,4 @@
-# SBOM Generation
+# Command Line SBOM Generation
 
 The CBI p2 SBOM Generator supports command line invocation via the CBI p2 SBOM Application.
 Most command line options passed to the application are forwarded directly to the generator.
@@ -283,7 +283,7 @@ Specify to write the CycloneDX SBOM JSON to the given file.
 
 ---
 
-## Generating SBOMs for Multiple Installations or Slices
+## Multiple Installation or Slice Generation
 
 The CBI p2 SBOM Generator Application provides a wrapper around the CBI p2 SBOM Generator.
 It provides support for generating an HTML index with links to the SBOM as well as links to the renderer for those SBOMs.
@@ -363,7 +363,7 @@ Due to cross-origin scripting restrictions, the referenced SBOM URI and the rend
 
 This mapping is parsed and used to possibly open the generated index in a browser (if the redirected index URL is not a file: scheme).
 
-#### Example
+#### Index and Rendering Example
 
 In the [CBI p2 SBOM Development IDE](../CONTRIBUTING.md)
 we use the following in launch configurations in order to open the renderer via `localhost` in a browser

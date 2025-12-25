@@ -1,9 +1,22 @@
 # Maven/Jenkins Integration
 
-Under construction.
+Because the CBI p2 SBOM Generator can be applied directly to the artifacts already produced by existing continuous integration processes,
+it's easy to integrate SBOM generation into a project's build processes.
+
+
+## Proof of Concept
+
+The following jobs are used to test the generator with various combinations of command line options
+and provide a basis for producing your own jobs:
+
+- https://ci.eclipse.org/cbi/view/p2RepoRelated/job/cbi.p2repo.sbom-generator/
+- https://ci.eclipse.org/cbi/view/p2RepoRelated/job/cbi.p2repo.sbom-general-generator/
+
 
 ## Projects Using the CBI p2 SBOM Generator
 
+The SBOM generator is used by the following projects to produce SBOM for publishing to [https://sbom.eclipse.org](https://sbom.eclipse.org),
+providing samples that serve as basis for other projects to generated SBOMs and to publish then to dependency-track.
 
 ### Orbit
 

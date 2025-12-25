@@ -13,11 +13,11 @@ It is highly recommended to read the [conceptual overview](overview.md) for a de
 
 ## Command Line Interface
 
-Please read the [command line interface guide](cli-guide.md) for details about the supported command line options.
+Please read the [command line interface ](cli-guide.md) guide for details about the supported command line options.
 
 ## Maven/Jenkins Integration
 
-Please read the [Maven/Jenkins guide](build-guide.md) for details about driving the generation process in continuous integration builds.
+Please read the [Maven/Jenkins Integration](build-guide.md) guide for details about driving the generation process in continuous integration builds.
 
 ## IDE Integration
 
@@ -27,3 +27,18 @@ Please read the [IDE guide](ide-guide.md) for details about the IDE integration.
 
 Please read the [renderer guide](renderer-guide.md) for details about the web-based render.
 
+## Setting Up a Development Environment
+
+You can set up a pre-configured IDE for the development of the p2 SBOM Generator projects using the following link.
+
+[![Create Eclipse Development Environment for the p2 SBOM Generator](https://download.eclipse.org/oomph/www/setups/svg/p2_SBOM.svg)](https://www.eclipse.org/setups/installer/?url=https://raw.githubusercontent.com/eclipse-cbi/p2repo-sbom/main/releng/org.eclipse.cbi.p2repo.sbom.releng.parent/setup/P2RepositorySBOMConfiguration.setup&show=true "Click to open Eclipse-Installer Auto Launch or drag onto your running installer's title area")
+
+## Continuous Integration
+
+The following job builds the head product and the update sites:
+
+- https://ci.eclipse.org/cbi/view/p2RepoRelated/job/p2repo-sbom/
+
+The website is kept up-to-date via the following job:
+
+- https://ci.eclipse.org/cbi/view/p2RepoRelated/job/cbi.p2repo.sbom-promote-website/
