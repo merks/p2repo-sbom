@@ -180,6 +180,22 @@ and add any advisory/external references found by such queries.
 Specify to query [ClearlyDefined](https://clearlydefined.io/) metadata for Maven coordinates to add declared license info as a component property.
 The server is notoriously prone to network failure.
 
+### `-dependency-track`
+
+Specify to transform the generated SBOM to produce results more appropriate for uploading to 
+[`dependency-track`](https://dependencytrack.org/).
+
+A `dependency-track` server currently flattens nested components and loses pedigree details:
+
+- [DependencyTrack#4119](https://github.com/DependencyTrack/dependency-track/issues/4119)
+
+As a result, the useful content generated for [pedigree](overview.md#pedigree) and [nested jars](overview.md#nested-jars) is actually not useful for `dependency-track`.
+
+With this option,
+nested-jar components and pedigree components are flattened by the generator
+and a dependency is added from the container component to the flattened component.
+
+
 ### `-minimize-root-dependencies`
 
 Specify to minimize the dependencies of the SBOM's metadata component to be the roots of the dependency graph induced by all of the SBOM's components.

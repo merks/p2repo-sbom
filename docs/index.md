@@ -35,7 +35,7 @@ You can set up a pre-configured IDE for the development of the p2 SBOM Generator
 
 ## Continuous Integration
 
-The following job builds the head product and the update sites:
+The following job builds the headless product and the update sites:
 
 - https://ci.eclipse.org/cbi/view/p2RepoRelated/job/p2repo-sbom/
 

@@ -48,6 +48,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.jar.JarInputStream;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -284,6 +285,8 @@ public class SBOMGenerator extends AbstractApplication {
 
 	private final boolean fetchClearlyDefined;
 
+	private final boolean dependencyTrack;
+
 	private final Pattern rootIUInclusions;
 
 	private final Pattern classifierExclusions;
@@ -322,6 +325,8 @@ public class SBOMGenerator extends AbstractApplication {
 		fetchAdvisory = getArgument("-advisory", args);
 
 		fetchClearlyDefined = getArgument("-clearly-defined", args);
+
+		dependencyTrack = getArgument("-dependency-track", args);
 
 		uriRedirections = parseRedirections(getArguments("-redirections", args, List.of()));
 
@@ -422,6 +427,10 @@ public class SBOMGenerator extends AbstractApplication {
 			System.out.println();
 			System.out.println("rejected-url");
 			rejectedURLs.stream().forEach(System.out::println);
+		}
+
+		if (dependencyTrack) {
+			transformForDependencyTrack();
 		}
 
 		computeRootComponents();
@@ -672,10 +681,13 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 
 			// Transfer gathered details from binary IU to corresponding source IU.
+			var includedIUs = new HashSet<IInstallableUnit>(includedArtifactIUs.values());
 			for (var entry : iuComponents.entrySet()) {
 				var iu = entry.getKey();
-				var component = entry.getValue();
-				transferDetailsFromBinaryToSource(component, iu);
+				if (includedIUs.contains(iu)) {
+					var component = entry.getValue();
+					transferDetailsFromBinaryToSource(component, iu);
+				}
 			}
 
 			progress.subTask("");
@@ -756,6 +768,67 @@ public class SBOMGenerator extends AbstractApplication {
 				}
 			} catch (InterruptedException ex) {
 				throw new ProvisionException("Analysis took more than 10 minutes to complete", ex);
+			}
+		}
+	}
+
+	private void transformForDependencyTrack() {
+		var components = bom.getComponents();
+		var dependencies = bom.getDependencies();
+		var dependenciesMap = dependencies.stream().collect(Collectors.toMap(Dependency::getRef, Function.identity()));
+		var componentHandler = new Object() {
+			public void promoteComponent(Component mainComponent, String type, Component subComponent) {
+				// Create a dependency from the main component tot he subComponent.
+				var dependency = dependenciesMap.get(mainComponent.getBomRef());
+				var subComponentBomRef = subComponent.getBomRef();
+				dependency.addDependency(new Dependency(subComponentBomRef));
+
+				// Annotate and promote the subComponent and define empty associated
+				// dependencies for it.
+				subComponent.addProperty(createProperty(type, "true"));
+				components.add(subComponent);
+				dependencies.add(new Dependency(subComponentBomRef));
+			}
+		};
+		var pedigreeHandler = new Object() {
+			public void handlePedigree(Component mainComponent, String type, Component pedigreeCompoonent) {
+				var pedigree = pedigreeCompoonent.getPedigree();
+				if (pedigree != null) {
+					pedigreeCompoonent.setPedigree(null);
+					var ancestors = pedigree.getAncestors();
+					if (ancestors != null) {
+						var ancestorComponents = ancestors.getComponents();
+						if (ancestorComponents != null) {
+							for (var ancestorComponent : ancestorComponents) {
+								var purl = ancestorComponent.getPurl();
+								// A pedigree is created only if the Maven PURL is known.
+								if (purl != null) {
+									componentHandler.promoteComponent(mainComponent, type, ancestorComponent);
+								}
+							}
+						}
+					}
+
+				}
+			}
+		};
+
+		for (var component : components.toArray(Component[]::new)) {
+			pedigreeHandler.handlePedigree(component, "ancestor", component);
+			var nestedComponents = component.getComponents();
+			if (nestedComponents != null) {
+				component.setComponents(null);
+				for (var nestedComponent : nestedComponents) {
+					var purl = nestedComponent.getPurl();
+					if (purl != null) {
+						// If there is a PURL, the nested jar is one known to come directly from Maven.
+						componentHandler.promoteComponent(component, "nested-jar", nestedComponent);
+					} else {
+						// If there is no pedigree, the nested jar is ignored because we have no useful
+						// information about it in terms of dependency-track..
+						pedigreeHandler.handlePedigree(component, "nested-jar", nestedComponent);
+					}
+				}
 			}
 		}
 	}
@@ -1237,6 +1310,7 @@ public class SBOMGenerator extends AbstractApplication {
 		component.setType(Component.Type.LIBRARY);
 		component.setName(mavenDescriptor.artifactId());
 		component.setGroup(mavenDescriptor.groupId());
+		component.setVersion(mavenDescriptor.version());
 		component.setPurl(mavenDescriptor.mavenPURL());
 		return component;
 	}
@@ -1250,6 +1324,7 @@ public class SBOMGenerator extends AbstractApplication {
 			// If it's verified to be the identical artifact.
 			component.setName(mavenDescriptor.artifactId());
 			component.setGroup(mavenDescriptor.groupId());
+			component.setVersion(mavenDescriptor.version());
 		} else {
 			// If it's got a pedigree, use the original jar path.
 			component.setName(path);
