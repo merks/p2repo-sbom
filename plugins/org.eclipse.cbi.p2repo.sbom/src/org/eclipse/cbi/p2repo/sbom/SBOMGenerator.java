@@ -681,7 +681,7 @@ public class SBOMGenerator extends AbstractApplication {
 			}
 
 			// Transfer gathered details from binary IU to corresponding source IU.
-			var includedIUs = new HashSet<IInstallableUnit>(includedArtifactIUs.values());
+			var includedIUs = new HashSet<>(includedArtifactIUs.values());
 			for (var entry : iuComponents.entrySet()) {
 				var iu = entry.getKey();
 				if (includedIUs.contains(iu)) {
@@ -1054,7 +1054,7 @@ public class SBOMGenerator extends AbstractApplication {
 				var subComponent = mavenDescriptor != null
 						? createMavenJarComponent(component, jar, mavenDescriptor, nestedJarBytes)
 						: createJarComponent(component, jar);
-				addHashes(subComponent, entry.getValue());
+				addHashes(subComponent, nestedJarBytes);
 				component.addComponent(subComponent);
 			}
 		}
@@ -1495,7 +1495,9 @@ public class SBOMGenerator extends AbstractApplication {
 			// Otherwise record this as a pedigree ancestor component.
 			var pedigree = new Pedigree();
 			var ancenstors = new Ancestors();
-			ancenstors.addComponent(createAncestorComponent(component, mavenDescriptor));
+			var ancestorComponent = createAncestorComponent(component, mavenDescriptor);
+			addHashes(ancestorComponent, mavenArtifactBytes);
+			ancenstors.addComponent(ancestorComponent);
 			pedigree.setAncestors(ancenstors);
 			pedigree.setNotes(String.join(", ", differences));
 			component.setPedigree(pedigree);
