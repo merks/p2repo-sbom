@@ -46,8 +46,11 @@ projects can use [`https://sbom.eclipse.org`](https://sbom.eclipse.org)
 to upload SBOMs and analyze them for vulnerabilities.
 The generator can be used to generate an SBOM that is uploaded to `sbom.eclipse.org`
 as described in the [Maven/Jenkins Integration](build-guide.md) guide.
-Such an SBOM can subsequently be downloaded, enhanced with vulnerabilities details, for viewing in the renderer
-using `Components → Download BOM → Inventory with Vulnerabilities`:
+Due to current limitations of `dependency-track`,
+it's best to use the [`-dependency-track`](cli-guide.md#-dependency-track) option for generating the SBOM to be uploaded.
+A `dependency-track` SBOM can subsequently be downloaded, enhanced with vulnerabilities details,
+using `Components → Download BOM → Inventory with Vulnerabilities`
+for viewing in the renderer:
 
 ![](assets/dependency-track-download-sbom.png)
 
@@ -60,3 +63,6 @@ Here we've filtered to show only components `With Children`
 and to show only `External References` of type `advisories` as children.
 
 ![](assets/renderer-vulnerabilities.png)
+
+Note that in this case the renderer displays a `dependency-track` property that links back to the originating `dependency-track` project
+and that each component has a <img class="icon" style="max-width: 1em;" src="https://sbom.eclipse.org/favicon.ico"> link to that component's `dependenecy-track` details.

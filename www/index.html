@@ -3,13 +3,9 @@
 
 <head>
 	<title>SBOM | Eclipse Foundation</title>
+	<meta charset="UTF-8">
 	<meta name="keywords" content="eclipse,sbom">
 	<link rel="icon" type="image/ico" href="favicon.ico">
-	<!--
-	<link rel="preconnect stylesheet" href="../project.css">
-	<script src="../project.js"></script
-	<script src="project.js"></script>
-	-->
 	<style>
 		/* <![CDATA[*/
 		body {
@@ -136,10 +132,21 @@
 		.bom-property-key {
 			font-weight: bold;
 			color: darkblue;
+			font-size: 80%;
 		}
 
 		.bom-property-value {
 			color: darkgreen;
+			font-size: 90%;
+		}
+
+		.bom-property-value a {
+			text-decoration: none;
+			color: inherit;
+		}
+
+		.bom-property-value span {
+			cursor: copy;
 		}
 
 		.bom-property-punctuation {
@@ -422,7 +429,14 @@
 	<script>
 		//<![CDATA[
 
-		const vulnerabilityBase = 'https://sbom.eclipse.org/vulnerabilities/';
+		let isDependencyTrack = false;
+		let metadataComponent = null;
+
+		const dependencyTrackURI = 'https://sbom.eclipse.org/';
+		const dependencyTrackIcon = `<img class="icon" style="max-width: 1em;" src="${dependencyTrackURI}favicon.ico"> `;
+		const dependencyTrackVulnerabilityURI = dependencyTrackURI == null ? null : dependencyTrackURI + 'vulnerabilities/';
+		const dependencyTrackComponentURI = dependencyTrackURI == null ? null : dependencyTrackURI + 'components/';
+
 		const reset = '\u27F2';
 		const collapsed = '\u25B7';
 		const expanded = '\u25E2';
@@ -431,7 +445,6 @@
 		const hidden = '\u25BC';
 
 		const purlPattern = /^pkg:(?<scheme>[^/]+)\/((?<group>[^/]+)\/)?(?<name>[^&]+)@(?<version>[^/?]+)(?<query>\?.*|)$/;
-
 
 		const componentMap = new Map();
 		const incomingDependencyMap = new Map();
@@ -456,6 +469,7 @@
 			mavenRepositories.clear();
 			ids.clear();
 			vulnerabilitiesMap.clear();
+			document.getElementById('dependency-track-help').style.display = 'none';
 		}
 
 		function restore() {
@@ -881,6 +895,13 @@ ${getPropertyElementDetail(property)}
 			return `<span class="property-name">${name}</span><span class="property-punctuation">=</span><span class="property-value">${value}</span>`;
 		}
 
+		function getBOMPropertyValue(value) {
+			if (typeof value == 'string' && value.startsWith('urn:')) {
+				return `<span title="${value}" onclick="copyToClipboard(this.title)">${value.replace(/....-.*-......../, '&hellip;')}</span>`
+			}
+			return value;
+		}
+
 		function getHashElements(component) {
 			const hashes = getModelValue(component, 'hashes');
 			if (hashes != null) {
@@ -934,6 +955,16 @@ ${getLicenseElementDetail(license)}
 			return result;
 		}
 
+		function getComponentDependencyTrackLink(component) {
+			if (isDependencyTrack) {
+				const bomRef = getModelValue(component, 'bom-ref');
+				if (bomRef != null) {
+					return ` <a href="${dependencyTrackComponentURI}${bomRef}" target="_blank">${dependencyTrackIcon}</a>`;
+				}
+			}
+			return '';
+		}
+
 		function getComponentLabel(component) {
 			const scope = getModelValue(component, 'scope');
 			const group = getModelValue(component, 'group');
@@ -942,7 +973,6 @@ ${getLicenseElementDetail(license)}
 			const groupElement = group == null ? '' : ` - <span class="label-group">${group}</span>`;
 			return `<span class="label"><span class="label-name">${name}</span> <span class="label-version">${version}</span>${groupElement}</span>`;
 		}
-
 
 		function getComponentIcon(component) {
 			const classifier = getComponentClassifier(component);
@@ -1048,7 +1078,28 @@ ${getLicenseElementDetail(license)}
 			return defaultValue;
 		}
 
+		function getMetadataToolsName(sbom) {
+			const metadata = getModelValue(sbom, 'metadata')
+			if (metadata != null) {
+				const tools = getModelValue(metadata, 'tools', []);
+				if (tools != null && tools.length == 1) {
+					const name = getModelValue(tools[0], 'name');
+					return name;
+				}
+			}
+		}
+
+		function getMetadataComponent(sbom) {
+			const metadata = getModelValue(sbom, 'metadata')
+			if (metadata != null) {
+				return getModelValue(metadata, 'component');
+			}
+		}
+
 		function buildModel(sbom) {
+			isDependencyTrack = dependencyTrackURI != null && getMetadataToolsName(sbom) == 'Dependency-Track';
+			metadataComponent = getMetadataComponent(sbom);
+
 			bomProperties.set('version', getModelValue(sbom, 'version'));
 			bomProperties.set('bom-format', getModelValue(sbom, 'bomFormat'));
 			bomProperties.set('spec-version', getModelValue(sbom, 'specVersion'));
@@ -1082,7 +1133,7 @@ ${getLicenseElementDetail(license)}
 				}).filter(component => component != null));
 			}
 
-			if (vulnerabilityBase != null) {
+			if (dependencyTrackVulnerabilityURI != null) {
 				for (const vulnerability of getModelValue(sbom, 'vulnerabilities', [])) {
 					const id = getModelValue(vulnerability, 'id');
 					const source = getModelValue(vulnerability, 'source');
@@ -1091,7 +1142,7 @@ ${getLicenseElementDetail(license)}
 						if (name != null) {
 							const advisory = {
 								'type': 'advisories',
-								'url': `${vulnerabilityBase}${name}/${id}`
+								'url': `${dependencyTrackVulnerabilityURI}${name}/${id}`
 							};
 							const affects = getModelValue(vulnerability, 'affects', []);
 							for (const affect of affects) {
@@ -1590,7 +1641,7 @@ ${`<span style="opacity: ${nextId == null ? 0.25 : 1.0};" class="action" onclick
 				const outgoingDependencyElements = getDependencyElements(outgoingDependencyMap, component, 'outgoing-dependency');
 
 				return `<div style="white-space: nowrap;" id=${getModelValue(component, 'bom-ref')} class="${getComponentClassifier(component)}" data-showing="true">
-${generateButton()}<span class="label">&nbsp;${getComponentIcon(component)} ${getComponentLabel(component)}<span>
+${generateButton()}<span class="label">&nbsp;${getComponentIcon(component)} ${getComponentLabel(component)}${getComponentDependencyTrackLink(component)}<span>
 ${purlElements.join('\n')}
 ${pedigreeElements.join('\n')}
 ${nestedComponentElements.join('\n')}
@@ -1614,8 +1665,18 @@ ${componentElements.join('\n')}
 
 			const summary = document.getElementById('summary');
 			const properties = bomProperties.entries().map(([key, value]) =>
-				`<span class="bom-property-key">${key}</span><span class="bom-property-punctuation">:</span> <span class="bom-property-value">${value}</span>`
+				`<span class="bom-property-key">${key}</span><span class="bom-property-punctuation">:</span> <span class="bom-property-value">${getBOMPropertyValue(value)}</span>`
 			).toArray();
+
+			if (isDependencyTrack && metadataComponent != null) {
+				const name = getModelValue(metadataComponent, 'name');
+				const version = getModelValue(metadataComponent, 'version');
+				const bomRef = getModelValue(metadataComponent, 'bom-ref');
+				properties.push(`
+<span class="bom-property-key">dependency-track</span><span class="bom-property-punctuation">:</span> <span class="bom-property-value">
+<a href="${dependencyTrackURI}projects/${bomRef}" target="_blank">${dependencyTrackIcon} ${name} &#x25B8; ${version}</a>
+</span>`);
+			}
 
 			summary.innerHTML += properties.join('<span class="bom-property-punctuation">,</span> ') + `
 <img onclick="popup(\'help-root\')" alt="help" src="help.svg">
@@ -1637,6 +1698,10 @@ ${componentElements.join('\n')}
 			doFilter();
 
 			form.parentElement.style.display = 'none';
+
+			if (isDependencyTrack) {
+				document.getElementById('dependency-track-help').style.display = 'block';
+			}
 		}
 
 		function generatNestedFilters(keys, type) {
@@ -2232,6 +2297,9 @@ ${componentElements.join('\n')}
 						The <a href="https://cyclonedx.org/docs/1.6/json/#serialNumber">serial number</a> of the SBOM.
 					</li>
 				</ul>
+				<div id="dependency-track-help" style="display: none;">
+					A link to the <span data-generate="dependencyTrackIcon"></span><code>dependency-track</code> project is provided.
+				</div>
 			</div>
 
 			<div id="help-control" class="modal-popup-description">
